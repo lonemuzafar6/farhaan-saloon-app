@@ -163,6 +163,58 @@ export const SaloonProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       setAuditLogs(StorageEngine.getAuditLogs());
       return updated;
     });
+
+    // Also update any active queues and appointments referencing this barber
+    setQueues((prev) => {
+      const updated = prev.map((q) => {
+        if (q.barber_id === barber.id) {
+          return { ...q, barber_name: barber.name };
+        }
+        return q;
+      });
+      StorageEngine.saveQueues(updated);
+      return updated;
+    });
+
+    setAppointments((prev) => {
+      const updated = prev.map((apt) => {
+        if (apt.barber_id === barber.id) {
+          return { ...apt, barber_name: barber.name };
+        }
+        return apt;
+      });
+      StorageEngine.saveAppointments(updated);
+      return updated;
+    });
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(barber.id);
+        if (isUuid) {
+          Promise.resolve(
+            supabase
+              .from('barbers')
+              .upsert({
+                id: barber.id,
+                name: barber.name,
+                photo_url: barber.photo_url,
+                bio: barber.bio,
+                experience_years: barber.experience_years,
+                avg_service_mins: barber.avg_service_mins,
+                specialties: barber.specialties,
+                pin_code: barber.pin_code,
+                is_active: barber.is_active,
+              })
+          )
+            .then(() => console.log('Barber synced to Supabase'))
+            .catch((err: unknown) => console.warn('Supabase sync notice:', err));
+        } else {
+          console.log(`Barber "${barber.name}" saved to persistent storage.`);
+        }
+      } catch (err) {
+        console.warn('Supabase sync error ignored for local mode:', err);
+      }
+    }
   }, []);
 
   const addBarber = useCallback((barberData: Omit<Barber, 'id'>): Barber => {

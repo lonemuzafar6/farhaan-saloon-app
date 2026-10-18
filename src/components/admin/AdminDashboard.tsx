@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import {
   Shield,
   Users,
@@ -19,7 +19,8 @@ import {
   Lock,
   Unlock,
   KeyRound,
-  Image,
+  Image as ImageIcon,
+  Upload,
   Phone,
   MapPin,
   Flame,
@@ -28,11 +29,21 @@ import {
   ToggleLeft,
   ToggleRight,
   LogOut,
-  Eye,
+  Camera,
 } from 'lucide-react';
 import { useSaloon } from '../../context/SaloonContext';
 import { calculateBarberWaitTime } from '../../lib/queueAlgorithm';
 import { Barber, Service, HaircutStyle, QueueEntry, StyleCategory } from '../../types';
+import { compressImageFile } from '../../utils/imageCompressor';
+
+const PRESET_BARBER_AVATARS = [
+  { label: 'Master Farhaan', url: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&auto=format&fit=crop&q=80' },
+  { label: 'Senior Sameer', url: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=400&auto=format&fit=crop&q=80' },
+  { label: 'Specialist Zahid', url: 'https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?w=400&auto=format&fit=crop&q=80' },
+  { label: 'Precision Irfan', url: 'https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=400&auto=format&fit=crop&q=80' },
+  { label: 'Executive Barber', url: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=400&auto=format&fit=crop&q=80' },
+  { label: 'Beard Sculptor', url: 'https://images.unsplash.com/photo-1583863788434-e58a36330cf0?w=400&auto=format&fit=crop&q=80' },
+];
 
 export const AdminDashboard: React.FC = () => {
   const {
@@ -79,6 +90,10 @@ export const AdminDashboard: React.FC = () => {
     setSuccessMessage(msg);
     setTimeout(() => setSuccessMessage(null), 3000);
   };
+
+  // File input refs
+  const barberFileInputRef = useRef<HTMLInputElement>(null);
+  const styleFileInputRef = useRef<HTMLInputElement>(null);
 
   // -------------------------------------------------------------
   // MODAL STATES FOR EDITING EVERYTHING (PRICES, PHOTOS, DETAILS)
@@ -145,6 +160,53 @@ export const AdminDashboard: React.FC = () => {
   const [showTransferModal, setShowTransferModal] = useState<QueueEntry | null>(null);
   const [transferTargetBarberId, setTransferTargetBarberId] = useState('');
   const [transferReason, setTransferReason] = useState('Workload balancing');
+  const [isCompressingPhoto, setIsCompressingPhoto] = useState(false);
+
+  // File Upload Handlers (converts phone gallery/camera photos to optimized Data URL)
+  const handleBarberPhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      setIsCompressingPhoto(true);
+      // Compresses to max 500x500 (~25-35KB), avoiding browser localStorage quota limits
+      const compressedUrl = await compressImageFile(file, {
+        maxWidth: 500,
+        maxHeight: 500,
+        quality: 0.82,
+      });
+      setBarberForm((prev) => ({ ...prev, photo_url: compressedUrl }));
+      showToast('Barber photo processed and preview ready!');
+    } catch (err) {
+      console.error('Barber photo compression error:', err);
+      alert('Could not process this image. Please select a standard JPG, PNG, or WEBP file.');
+    } finally {
+      setIsCompressingPhoto(false);
+      e.target.value = '';
+    }
+  };
+
+  const handleStylePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      setIsCompressingPhoto(true);
+      const compressedUrl = await compressImageFile(file, {
+        maxWidth: 600,
+        maxHeight: 600,
+        quality: 0.82,
+      });
+      setStyleForm((prev) => ({ ...prev, image_url: compressedUrl }));
+      showToast('Haircut style photo processed!');
+    } catch (err) {
+      console.error('Style photo compression error:', err);
+      alert('Could not process this image. Please select a standard JPG, PNG, or WEBP file.');
+    } finally {
+      setIsCompressingPhoto(false);
+      e.target.value = '';
+    }
+  };
 
   // Analytics calculation
   const analytics = useMemo(() => {
@@ -263,7 +325,7 @@ export const AdminDashboard: React.FC = () => {
   };
 
   // -------------------------------------------------------------
-  // BARBER SAVE / UPDATE (WITH PHOTO)
+  // BARBER SAVE / UPDATE (WITH PHOTO & NAME)
   // -------------------------------------------------------------
   const handleOpenAddBarber = () => {
     setBarberForm({
@@ -296,7 +358,10 @@ export const AdminDashboard: React.FC = () => {
 
   const handleSaveBarber = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!barberForm.name.trim()) return;
+    if (!barberForm.name.trim()) {
+      alert('Please enter a barber name.');
+      return;
+    }
 
     const specsArray = barberForm.specialties
       .split(',')
@@ -314,7 +379,7 @@ export const AdminDashboard: React.FC = () => {
         specialties: specsArray,
         pin_code: barberForm.pin_code.trim() || '1111',
       });
-      showToast(`Updated barber details and photo for ${barberForm.name}!`);
+      showToast(`Updated barber "${barberForm.name}" details and photo!`);
     } else {
       addBarber({
         name: barberForm.name.trim(),
@@ -332,7 +397,7 @@ export const AdminDashboard: React.FC = () => {
           days: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
         },
       });
-      showToast(`Added new barber ${barberForm.name}!`);
+      showToast(`Added new barber "${barberForm.name}"!`);
     }
     setShowAddBarberModal(false);
     setEditingBarber(null);
@@ -628,9 +693,9 @@ export const AdminDashboard: React.FC = () => {
       <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none border-b border-charcoal-800">
         {[
           { id: 'overview', label: 'Queues & Workload', icon: Users },
+          { id: 'barbers', label: 'Barber Staff & Photos', icon: Scissors },
           { id: 'services', label: 'Services & Prices (₹)', icon: DollarSign },
           { id: 'gallery', label: 'Styles Lookbook & Photos', icon: Sparkles },
-          { id: 'barbers', label: 'Barber Staff & Photos', icon: Scissors },
           { id: 'info', label: 'Salon Info & 6-Digit PIN', icon: Settings },
           { id: 'bookings', label: 'Appointments On/Off', icon: Calendar },
           { id: 'reports', label: 'Daily Analytics & Revenue', icon: BarChart3 },
@@ -697,22 +762,34 @@ export const AdminDashboard: React.FC = () => {
                   className="bg-charcoal-900 border border-charcoal-800 rounded-3xl p-4 flex flex-col justify-between shadow-lg"
                 >
                   <div>
-                    <div className="flex items-center gap-3 border-b border-charcoal-800 pb-3 mb-3">
-                      <img
-                        src={barber.photo_url}
-                        alt={barber.name}
-                        className="w-10 h-10 rounded-xl object-cover border border-amber-500/40"
-                      />
-                      <div className="flex-1 min-w-0">
-                        <h4 className="text-xs font-bold text-white truncate">{barber.name}</h4>
-                        <span className="text-[10px] text-amber-400">
-                          {barber.current_status === 'serving'
-                            ? `In Chair (${waitEst.queue_length} in queue)`
-                            : barber.current_status === 'on_break'
-                            ? 'On Break'
-                            : 'Available'}
-                        </span>
+                    {/* Barber Header with Direct Edit Button */}
+                    <div className="flex items-center justify-between border-b border-charcoal-800 pb-3 mb-3">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <img
+                          src={barber.photo_url}
+                          alt={barber.name}
+                          className="w-10 h-10 rounded-xl object-cover border border-amber-500/40 flex-shrink-0"
+                        />
+                        <div className="min-w-0">
+                          <h4 className="text-xs font-bold text-white truncate">{barber.name}</h4>
+                          <span className="text-[10px] text-amber-400 block truncate">
+                            {barber.current_status === 'serving'
+                              ? `In Chair (${waitEst.queue_length} in line)`
+                              : barber.current_status === 'on_break'
+                              ? 'On Break'
+                              : 'Available'}
+                          </span>
+                        </div>
                       </div>
+
+                      {/* Direct Edit Barber Icon */}
+                      <button
+                        onClick={() => handleOpenEditBarber(barber)}
+                        className="p-1.5 rounded-lg bg-charcoal-800 hover:bg-amber-500 hover:text-charcoal-950 text-slate-300 transition-colors flex-shrink-0"
+                        title={`Edit ${barber.name}'s name and photo`}
+                      >
+                        <Edit className="w-3.5 h-3.5" />
+                      </button>
                     </div>
 
                     <div className="mb-3">
@@ -835,7 +912,99 @@ export const AdminDashboard: React.FC = () => {
       )}
 
       {/* ========================================================= */}
-      {/* TAB 2: SERVICES & PRICING (UPDATE PRICES IN ₹) */}
+      {/* TAB 2: BARBER STAFF & PHOTOS (PRIMARY EDITING LOCATION) */}
+      {/* ========================================================= */}
+      {activeTab === 'barbers' && (
+        <div className="space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <h3 className="text-base font-bold text-white flex items-center gap-2">
+                <Scissors className="w-4 h-4 text-amber-400" />
+                <span>Barber Staff Management</span>
+              </h3>
+              <p className="text-xs text-slate-400">
+                Click <strong>"Edit Name & Photo"</strong> below to change any barber's name or upload a photo directly from your device.
+              </p>
+            </div>
+            <button
+              onClick={handleOpenAddBarber}
+              className="px-4 py-2 rounded-xl bg-amber-500 text-charcoal-950 font-bold text-xs flex items-center gap-1.5 shadow"
+            >
+              <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
+              <span>Add New Barber</span>
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {barbers.map((b) => (
+              <div
+                key={b.id}
+                className="bg-charcoal-900 border border-charcoal-800 hover:border-amber-500/40 rounded-3xl p-5 shadow-lg flex flex-col justify-between transition-colors"
+              >
+                <div>
+                  <div className="flex items-start gap-4 mb-3">
+                    <img
+                      src={b.photo_url}
+                      alt={b.name}
+                      className="w-16 h-16 rounded-2xl object-cover border-2 border-amber-500/50 shadow"
+                    />
+                    <div className="flex-1">
+                      <div className="flex justify-between items-start">
+                        <h4 className="text-base font-bold text-white">{b.name}</h4>
+                        <span className="text-xs font-mono bg-charcoal-950 px-2 py-0.5 rounded border border-charcoal-800 text-amber-400">
+                          PIN: {b.pin_code}
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-400 mt-0.5">
+                        {b.experience_years} years exp • ~{b.avg_service_mins}m avg service
+                      </p>
+                    </div>
+                  </div>
+
+                  <p className="text-xs text-slate-300 leading-relaxed mb-3 line-clamp-2">{b.bio}</p>
+
+                  <div className="flex flex-wrap gap-1.5 mb-2">
+                    {b.specialties.map((spec, i) => (
+                      <span
+                        key={i}
+                        className="text-[10px] bg-charcoal-950 text-slate-300 px-2 py-0.5 rounded border border-charcoal-800"
+                      >
+                        {spec}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 mt-3 pt-3 border-t border-charcoal-800">
+                  <button
+                    onClick={() => handleOpenEditBarber(b)}
+                    className="py-2.5 px-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-charcoal-950 text-xs font-bold transition-colors flex items-center justify-center gap-1.5 shadow"
+                  >
+                    <Edit className="w-3.5 h-3.5 stroke-[2.5]" />
+                    <span>Edit Name & Photo</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      if (confirm(`Remove barber "${b.name}"?`)) {
+                        deleteBarber(b.id);
+                        showToast(`Removed barber ${b.name}`);
+                      }
+                    }}
+                    className="py-2.5 px-3 rounded-xl bg-charcoal-800 hover:bg-rose-600/30 text-rose-400 text-xs font-semibold transition-colors flex items-center justify-center gap-1.5"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Delete</span>
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================= */}
+      {/* TAB 3: SERVICES & PRICING (UPDATE PRICES IN ₹) */}
       {/* ========================================================= */}
       {activeTab === 'services' && (
         <div className="space-y-4">
@@ -909,7 +1078,7 @@ export const AdminDashboard: React.FC = () => {
       )}
 
       {/* ========================================================= */}
-      {/* TAB 3: STYLES LOOKBOOK & PHOTOS (UPDATE PHOTOS & PRICES) */}
+      {/* TAB 4: STYLES LOOKBOOK & PHOTOS */}
       {/* ========================================================= */}
       {activeTab === 'gallery' && (
         <div className="space-y-4">
@@ -920,7 +1089,7 @@ export const AdminDashboard: React.FC = () => {
                 <span>Trending Styles Lookbook & Photos</span>
               </h3>
               <p className="text-xs text-slate-400">
-                Update haircut photos, pricing in ₹, barber cutting notes, and trending status.
+                Update haircut photos directly from device, prices in ₹, and barber cutting notes.
               </p>
             </div>
             <button
@@ -982,98 +1151,6 @@ export const AdminDashboard: React.FC = () => {
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                     <span>Remove</span>
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* ========================================================= */}
-      {/* TAB 4: BARBERS MANAGEMENT & PHOTOS */}
-      {/* ========================================================= */}
-      {activeTab === 'barbers' && (
-        <div className="space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div>
-              <h3 className="text-base font-bold text-white flex items-center gap-2">
-                <Scissors className="w-4 h-4 text-amber-400" />
-                <span>Barber Staff Management</span>
-              </h3>
-              <p className="text-xs text-slate-400">
-                Change barber photographs, working bio, 4-digit mobile PIN, and service duration.
-              </p>
-            </div>
-            <button
-              onClick={handleOpenAddBarber}
-              className="px-4 py-2 rounded-xl bg-amber-500 text-charcoal-950 font-bold text-xs flex items-center gap-1.5 shadow"
-            >
-              <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
-              <span>Add Barber</span>
-            </button>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {barbers.map((b) => (
-              <div
-                key={b.id}
-                className="bg-charcoal-900 border border-charcoal-800 rounded-3xl p-5 shadow-lg flex flex-col justify-between"
-              >
-                <div>
-                  <div className="flex items-start gap-4 mb-3">
-                    <img
-                      src={b.photo_url}
-                      alt={b.name}
-                      className="w-16 h-16 rounded-2xl object-cover border-2 border-amber-500/40 shadow"
-                    />
-                    <div className="flex-1">
-                      <div className="flex justify-between items-start">
-                        <h4 className="text-base font-bold text-white">{b.name}</h4>
-                        <span className="text-xs font-mono bg-charcoal-950 px-2 py-0.5 rounded border border-charcoal-800 text-amber-400">
-                          PIN: {b.pin_code}
-                        </span>
-                      </div>
-                      <p className="text-xs text-slate-400 mt-0.5">
-                        {b.experience_years} years exp • ~{b.avg_service_mins}m avg duration
-                      </p>
-                    </div>
-                  </div>
-
-                  <p className="text-xs text-slate-300 leading-relaxed mb-3 line-clamp-2">{b.bio}</p>
-
-                  <div className="flex flex-wrap gap-1.5 mb-2">
-                    {b.specialties.map((spec, i) => (
-                      <span
-                        key={i}
-                        className="text-[10px] bg-charcoal-950 text-slate-300 px-2 py-0.5 rounded border border-charcoal-800"
-                      >
-                        {spec}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-2 mt-3 pt-3 border-t border-charcoal-800">
-                  <button
-                    onClick={() => handleOpenEditBarber(b)}
-                    className="py-2 px-3 rounded-xl bg-charcoal-800 hover:bg-amber-500 hover:text-charcoal-950 text-slate-200 text-xs font-bold transition-colors flex items-center justify-center gap-1.5"
-                  >
-                    <Edit className="w-3.5 h-3.5" />
-                    <span>Edit Photo/Info</span>
-                  </button>
-
-                  <button
-                    onClick={() => {
-                      if (confirm(`Remove barber "${b.name}"?`)) {
-                        deleteBarber(b.id);
-                        showToast(`Removed barber ${b.name}`);
-                      }
-                    }}
-                    className="py-2 px-3 rounded-xl bg-charcoal-800 hover:bg-rose-600/30 text-rose-400 text-xs font-semibold transition-colors flex items-center justify-center gap-1.5"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                    <span>Delete</span>
                   </button>
                 </div>
               </div>
@@ -1353,6 +1430,210 @@ export const AdminDashboard: React.FC = () => {
       )}
 
       {/* ========================================================= */}
+      {/* MODAL: EDIT OR ADD BARBER (PHOTO UPLOAD + NAME + PRESETS) */}
+      {/* ========================================================= */}
+      {showAddBarberModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-charcoal-900 border border-charcoal-700 rounded-3xl max-w-md w-full p-6 shadow-2xl relative text-left max-h-[92vh] overflow-y-auto">
+            <button
+              onClick={() => setShowAddBarberModal(false)}
+              className="absolute top-4 right-4 p-1.5 rounded-full text-slate-400 hover:text-white hover:bg-charcoal-800 transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="flex items-center gap-2 mb-4">
+              <div className="w-9 h-9 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
+                <Scissors className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-white">
+                  {editingBarber ? `Edit Barber: ${editingBarber.name}` : 'Add New Barber'}
+                </h3>
+                <p className="text-xs text-slate-400">Update name, photo, and bio</p>
+              </div>
+            </div>
+
+            <form onSubmit={handleSaveBarber} className="space-y-4">
+              {/* Barber Name Input */}
+              <div>
+                <label className="block text-xs font-bold text-slate-300 mb-1">
+                  Barber Name <span className="text-amber-400">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Farhaan Lone"
+                  value={barberForm.name}
+                  onChange={(e) => setBarberForm({ ...barberForm, name: e.target.value })}
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-charcoal-950 border border-charcoal-700 text-white text-sm focus:outline-none focus:border-amber-500 font-semibold"
+                />
+              </div>
+
+              {/* Barber Photo Section: Upload file OR pick preset OR paste URL */}
+              <div className="bg-charcoal-950 p-4 rounded-2xl border border-charcoal-800 space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-slate-300">Barber Photograph</label>
+                  <span className="text-[10px] text-amber-400">Upload or Pick Preset</span>
+                </div>
+
+                {/* Live Photo Preview */}
+                <div className="flex items-center gap-4">
+                  <img
+                    src={barberForm.photo_url || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400'}
+                    alt="Preview"
+                    className="w-16 h-16 rounded-2xl object-cover border-2 border-amber-500/50 shadow-md flex-shrink-0"
+                  />
+                  <div className="flex-1 space-y-1.5">
+                    {/* Upload from Device Button */}
+                    <input
+                      ref={barberFileInputRef}
+                      type="file"
+                      accept="image/*"
+                      onChange={handleBarberPhotoUpload}
+                      className="hidden"
+                    />
+                    <button
+                      type="button"
+                      disabled={isCompressingPhoto}
+                      onClick={() => barberFileInputRef.current?.click()}
+                      className="w-full py-2.5 px-3 rounded-xl bg-charcoal-800 hover:bg-charcoal-700 disabled:opacity-50 text-amber-400 font-bold text-xs border border-charcoal-700 transition-colors flex items-center justify-center gap-2"
+                    >
+                      <Camera className="w-4 h-4" />
+                      <span>{isCompressingPhoto ? 'Optimizing Image...' : 'Upload from Phone / Gallery'}</span>
+                    </button>
+                    <p className="text-[10px] text-slate-500 text-center">
+                      Auto-compressed & stored locally (PNG, JPG, WEBP)
+                    </p>
+                  </div>
+                </div>
+
+                {/* Or Pick from 6 Master Barber Avatars */}
+                <div>
+                  <span className="text-[10px] text-slate-400 font-semibold block mb-1.5">
+                    Or select a professional avatar:
+                  </span>
+                  <div className="grid grid-cols-6 gap-1.5">
+                    {PRESET_BARBER_AVATARS.map((avatar, idx) => (
+                      <button
+                        type="button"
+                        key={idx}
+                        onClick={() => setBarberForm({ ...barberForm, photo_url: avatar.url })}
+                        className={`aspect-square rounded-xl overflow-hidden border-2 transition-transform hover:scale-105 ${
+                          barberForm.photo_url === avatar.url
+                            ? 'border-amber-400 ring-2 ring-amber-400/30'
+                            : 'border-charcoal-700 opacity-70 hover:opacity-100'
+                        }`}
+                        title={avatar.label}
+                      >
+                        <img src={avatar.url} alt={avatar.label} className="w-full h-full object-cover" />
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Or Paste Direct Photo URL */}
+                <div>
+                  <label className="text-[10px] text-slate-400 block mb-1">Or paste photo URL:</label>
+                  <input
+                    type="url"
+                    placeholder="https://..."
+                    value={barberForm.photo_url}
+                    onChange={(e) => setBarberForm({ ...barberForm, photo_url: e.target.value })}
+                    className="w-full px-3 py-1.5 rounded-lg bg-charcoal-900 border border-charcoal-700 text-slate-300 text-xs focus:outline-none focus:border-amber-500 font-mono"
+                  />
+                </div>
+              </div>
+
+              {/* Experience and Service Duration */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">
+                    Experience (Years)
+                  </label>
+                  <input
+                    type="number"
+                    value={barberForm.experience_years}
+                    onChange={(e) =>
+                      setBarberForm({
+                        ...barberForm,
+                        experience_years: Number(e.target.value),
+                      })
+                    }
+                    className="w-full px-3 py-2 rounded-xl bg-charcoal-950 border border-charcoal-700 text-white text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">
+                    Avg Service (Mins)
+                  </label>
+                  <input
+                    type="number"
+                    value={barberForm.avg_service_mins}
+                    onChange={(e) =>
+                      setBarberForm({
+                        ...barberForm,
+                        avg_service_mins: Number(e.target.value),
+                      })
+                    }
+                    className="w-full px-3 py-2 rounded-xl bg-charcoal-950 border border-charcoal-700 text-white text-xs"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">
+                  Specialties (Comma-separated)
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. Skin Fade, Beard Shaping, Hot Towel"
+                  value={barberForm.specialties}
+                  onChange={(e) =>
+                    setBarberForm({ ...barberForm, specialties: e.target.value })
+                  }
+                  className="w-full px-3 py-2 rounded-xl bg-charcoal-950 border border-charcoal-700 text-white text-xs"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">
+                  Barber 4-Digit Login PIN
+                </label>
+                <input
+                  type="text"
+                  maxLength={4}
+                  value={barberForm.pin_code}
+                  onChange={(e) =>
+                    setBarberForm({ ...barberForm, pin_code: e.target.value })
+                  }
+                  className="w-full px-3 py-2 rounded-xl bg-charcoal-950 border border-charcoal-700 text-amber-400 font-mono text-xs"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">Short Bio</label>
+                <textarea
+                  rows={2}
+                  placeholder="Brief description of experience and cutting style..."
+                  value={barberForm.bio}
+                  onChange={(e) => setBarberForm({ ...barberForm, bio: e.target.value })}
+                  className="w-full px-3 py-2 rounded-xl bg-charcoal-950 border border-charcoal-700 text-white text-xs"
+                />
+              </div>
+
+              <button
+                type="submit"
+                className="w-full py-3.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-charcoal-950 font-black text-sm tracking-wide transition-all shadow-lg shadow-amber-500/20"
+              >
+                {editingBarber ? 'Save Barber Details & Photo' : 'Create New Barber'}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================= */}
       {/* MODAL: EDIT OR ADD SERVICE (PRICES IN ₹) */}
       {/* ========================================================= */}
       {showAddServiceModal && (
@@ -1454,144 +1735,14 @@ export const AdminDashboard: React.FC = () => {
       )}
 
       {/* ========================================================= */}
-      {/* MODAL: EDIT OR ADD BARBER (PHOTO & INFO) */}
-      {/* ========================================================= */}
-      {showAddBarberModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className="bg-charcoal-900 border border-charcoal-700 rounded-3xl max-w-sm w-full p-5 shadow-2xl relative text-left">
-            <button
-              onClick={() => setShowAddBarberModal(false)}
-              className="absolute top-4 right-4 text-slate-400 hover:text-white"
-            >
-              <X className="w-5 h-5" />
-            </button>
-
-            <h3 className="text-base font-bold text-white mb-3 flex items-center gap-2">
-              <Scissors className="w-4 h-4 text-amber-400" />
-              <span>{editingBarber ? 'Edit Barber & Photo' : 'Add New Barber'}</span>
-            </h3>
-
-            <form onSubmit={handleSaveBarber} className="space-y-3">
-              <div>
-                <label className="block text-xs text-slate-300 mb-1">Barber Name *</label>
-                <input
-                  type="text"
-                  required
-                  value={barberForm.name}
-                  onChange={(e) => setBarberForm({ ...barberForm, name: e.target.value })}
-                  className="w-full px-3 py-2 rounded-xl bg-charcoal-950 border border-charcoal-700 text-white text-xs focus:outline-none focus:border-amber-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs text-slate-300 mb-1">Barber Photo URL *</label>
-                <input
-                  type="url"
-                  required
-                  value={barberForm.photo_url}
-                  onChange={(e) => setBarberForm({ ...barberForm, photo_url: e.target.value })}
-                  className="w-full px-3 py-2 rounded-xl bg-charcoal-950 border border-charcoal-700 text-white text-xs focus:outline-none focus:border-amber-500"
-                />
-                {barberForm.photo_url && (
-                  <div className="mt-2 flex items-center gap-2">
-                    <img
-                      src={barberForm.photo_url}
-                      alt="Preview"
-                      className="w-10 h-10 rounded-xl object-cover border border-amber-500/40"
-                    />
-                    <span className="text-[10px] text-slate-400">Photo Preview</span>
-                  </div>
-                )}
-              </div>
-
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block text-xs text-slate-300 mb-1">Experience (Yrs)</label>
-                  <input
-                    type="number"
-                    value={barberForm.experience_years}
-                    onChange={(e) =>
-                      setBarberForm({
-                        ...barberForm,
-                        experience_years: Number(e.target.value),
-                      })
-                    }
-                    className="w-full px-3 py-2 rounded-xl bg-charcoal-950 border border-charcoal-700 text-white text-xs"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs text-slate-300 mb-1">Avg Duration (Mins)</label>
-                  <input
-                    type="number"
-                    value={barberForm.avg_service_mins}
-                    onChange={(e) =>
-                      setBarberForm({
-                        ...barberForm,
-                        avg_service_mins: Number(e.target.value),
-                      })
-                    }
-                    className="w-full px-3 py-2 rounded-xl bg-charcoal-950 border border-charcoal-700 text-white text-xs"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs text-slate-300 mb-1">
-                  Specialties (Comma-separated)
-                </label>
-                <input
-                  type="text"
-                  value={barberForm.specialties}
-                  onChange={(e) =>
-                    setBarberForm({ ...barberForm, specialties: e.target.value })
-                  }
-                  className="w-full px-3 py-2 rounded-xl bg-charcoal-950 border border-charcoal-700 text-white text-xs"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs text-slate-300 mb-1">Barber 4-Digit Login PIN</label>
-                <input
-                  type="text"
-                  maxLength={4}
-                  value={barberForm.pin_code}
-                  onChange={(e) =>
-                    setBarberForm({ ...barberForm, pin_code: e.target.value })
-                  }
-                  className="w-full px-3 py-2 rounded-xl bg-charcoal-950 border border-charcoal-700 text-amber-400 font-mono text-xs"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs text-slate-300 mb-1">Short Bio</label>
-                <textarea
-                  rows={2}
-                  value={barberForm.bio}
-                  onChange={(e) => setBarberForm({ ...barberForm, bio: e.target.value })}
-                  className="w-full px-3 py-2 rounded-xl bg-charcoal-950 border border-charcoal-700 text-white text-xs"
-                />
-              </div>
-
-              <button
-                type="submit"
-                className="w-full mt-2 py-3 rounded-xl bg-amber-500 text-charcoal-950 font-bold text-xs shadow"
-              >
-                {editingBarber ? 'Save Barber Details' : 'Add Barber'}
-              </button>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* ========================================================= */}
-      {/* MODAL: EDIT OR ADD STYLE (PHOTO, PRICE, INSTRUCTIONS) */}
+      {/* MODAL: EDIT OR ADD STYLE (PHOTO UPLOAD, PRICE, INSTRUCTIONS) */}
       {/* ========================================================= */}
       {showAddStyleModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className="bg-charcoal-900 border border-charcoal-700 rounded-3xl max-w-sm w-full p-5 shadow-2xl relative text-left max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-charcoal-900 border border-charcoal-700 rounded-3xl max-w-md w-full p-6 shadow-2xl relative text-left max-h-[92vh] overflow-y-auto">
             <button
               onClick={() => setShowAddStyleModal(false)}
-              className="absolute top-4 right-4 text-slate-400 hover:text-white"
+              className="absolute top-4 right-4 p-1.5 rounded-full text-slate-400 hover:text-white hover:bg-charcoal-800 transition-colors"
             >
               <X className="w-5 h-5" />
             </button>
@@ -1601,30 +1752,28 @@ export const AdminDashboard: React.FC = () => {
               <span>{editingStyle ? 'Edit Lookbook Style & Photo' : 'Add New Style Photo'}</span>
             </h3>
 
-            <form onSubmit={handleSaveStyle} className="space-y-3">
+            <form onSubmit={handleSaveStyle} className="space-y-4">
               <div>
-                <label className="block text-xs text-slate-300 mb-1">Style Name *</label>
+                <label className="block text-xs font-bold text-slate-300 mb-1">Style Name *</label>
                 <input
                   type="text"
                   required
                   placeholder="e.g. Skin Fade Crop"
                   value={styleForm.name}
                   onChange={(e) => setStyleForm({ ...styleForm, name: e.target.value })}
-                  className="w-full px-3 py-2 rounded-xl bg-charcoal-950 border border-charcoal-700 text-white text-xs focus:outline-none focus:border-amber-500"
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-charcoal-950 border border-charcoal-700 text-white text-xs sm:text-sm focus:outline-none focus:border-amber-500 font-semibold"
                 />
               </div>
 
-              <div>
-                <label className="block text-xs text-slate-300 mb-1">Image / Photo URL *</label>
-                <input
-                  type="url"
-                  required
-                  value={styleForm.image_url}
-                  onChange={(e) => setStyleForm({ ...styleForm, image_url: e.target.value })}
-                  className="w-full px-3 py-2 rounded-xl bg-charcoal-950 border border-charcoal-700 text-white text-xs focus:outline-none focus:border-amber-500"
-                />
+              {/* Hairstyle Photo with Upload from Device */}
+              <div className="bg-charcoal-950 p-4 rounded-2xl border border-charcoal-800 space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-slate-300">Style Photograph</label>
+                  <span className="text-[10px] text-amber-400">Device Upload Supported</span>
+                </div>
+
                 {styleForm.image_url && (
-                  <div className="mt-2 relative aspect-[4/3] rounded-xl overflow-hidden bg-charcoal-950 border border-amber-500/40">
+                  <div className="relative aspect-[4/3] rounded-2xl overflow-hidden bg-charcoal-900 border border-amber-500/40">
                     <img
                       src={styleForm.image_url}
                       alt="Style Preview"
@@ -1632,11 +1781,40 @@ export const AdminDashboard: React.FC = () => {
                     />
                   </div>
                 )}
+
+                <input
+                  ref={styleFileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleStylePhotoUpload}
+                  className="hidden"
+                />
+                <button
+                  type="button"
+                  onClick={() => styleFileInputRef.current?.click()}
+                  className="w-full py-2.5 px-3 rounded-xl bg-charcoal-800 hover:bg-charcoal-700 text-amber-400 font-bold text-xs border border-charcoal-700 transition-colors flex items-center justify-center gap-2"
+                >
+                  <Camera className="w-4 h-4" />
+                  <span>Upload Haircut Photo from Phone / PC</span>
+                </button>
+
+                <div>
+                  <label className="text-[10px] text-slate-400 block mb-1">Or paste image URL:</label>
+                  <input
+                    type="url"
+                    placeholder="https://..."
+                    value={styleForm.image_url}
+                    onChange={(e) => setStyleForm({ ...styleForm, image_url: e.target.value })}
+                    className="w-full px-3 py-1.5 rounded-lg bg-charcoal-900 border border-charcoal-700 text-slate-300 text-xs focus:outline-none focus:border-amber-500 font-mono"
+                  />
+                </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs text-slate-300 mb-1">Price (₹) *</label>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">
+                    Price (₹) *
+                  </label>
                   <input
                     type="number"
                     required
@@ -1651,7 +1829,7 @@ export const AdminDashboard: React.FC = () => {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs text-slate-300 mb-1">Est. Mins</label>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">Est. Mins</label>
                   <input
                     type="number"
                     value={styleForm.estimated_mins}
@@ -1667,7 +1845,7 @@ export const AdminDashboard: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-xs text-slate-300 mb-1">Category</label>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">Category</label>
                 <select
                   value={styleForm.category}
                   onChange={(e) =>
@@ -1687,7 +1865,7 @@ export const AdminDashboard: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-xs text-slate-300 mb-1">Description</label>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">Description</label>
                 <textarea
                   rows={2}
                   value={styleForm.description}
@@ -1699,7 +1877,7 @@ export const AdminDashboard: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-xs text-slate-300 mb-1">
+                <label className="block text-xs font-semibold text-slate-300 mb-1">
                   Barber Cutting Notes (Shown to Barber)
                 </label>
                 <textarea
@@ -1733,9 +1911,9 @@ export const AdminDashboard: React.FC = () => {
 
               <button
                 type="submit"
-                className="w-full mt-2 py-3 rounded-xl bg-amber-500 text-charcoal-950 font-bold text-xs shadow"
+                className="w-full py-3.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-charcoal-950 font-black text-sm tracking-wide transition-all shadow-lg shadow-amber-500/20"
               >
-                {editingStyle ? 'Save Style & Price' : 'Add to Lookbook'}
+                {editingStyle ? 'Save Style Details & Photo' : 'Add to Lookbook'}
               </button>
             </form>
           </div>

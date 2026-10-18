@@ -63,7 +63,13 @@ export const StorageEngine = {
     try {
       localStorage.setItem(STORAGE_KEYS.BARBERS, JSON.stringify(barbers));
     } catch (e) {
-      console.error('Storage error', e);
+      console.error('Storage error saving barbers:', e);
+      try {
+        localStorage.removeItem(STORAGE_KEYS.AUDIT_LOGS);
+        localStorage.setItem(STORAGE_KEYS.BARBERS, JSON.stringify(barbers));
+      } catch (err2) {
+        console.error('Secondary storage error saving barbers:', err2);
+      }
     }
   },
 
@@ -97,7 +103,13 @@ export const StorageEngine = {
     try {
       localStorage.setItem(STORAGE_KEYS.STYLES, JSON.stringify(styles));
     } catch (e) {
-      console.error('Storage error', e);
+      console.error('Storage error saving styles:', e);
+      try {
+        localStorage.removeItem(STORAGE_KEYS.AUDIT_LOGS);
+        localStorage.setItem(STORAGE_KEYS.STYLES, JSON.stringify(styles));
+      } catch (err2) {
+        console.error('Secondary storage error saving styles:', err2);
+      }
     }
   },
 

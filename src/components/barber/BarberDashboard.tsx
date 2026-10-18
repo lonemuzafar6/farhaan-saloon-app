@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Scissors,
   User,
@@ -16,9 +16,14 @@ import {
   KeyRound,
   Sparkles,
   Timer,
+  Edit,
+  Camera,
+  X,
+  Check,
 } from 'lucide-react';
 import { useSaloon } from '../../context/SaloonContext';
 import { Barber, BarberStatus, QueueEntry, Appointment } from '../../types';
+import { compressImageFile } from '../../utils/imageCompressor';
 
 export const BarberDashboard: React.FC = () => {
   const {
@@ -28,6 +33,7 @@ export const BarberDashboard: React.FC = () => {
     activeBarberId,
     setActiveBarberId,
     updateBarberStatus,
+    updateBarber,
     startService,
     completeService,
     skipCustomer,
@@ -39,6 +45,16 @@ export const BarberDashboard: React.FC = () => {
   const [pinError, setPinError] = useState(false);
   const [activeTab, setActiveTab] = useState<'queue' | 'appointments' | 'skipped'>('queue');
   const [elapsedSeconds, setElapsedSeconds] = useState<number>(0);
+
+  // Profile Edit State
+  const [showEditProfileModal, setShowEditProfileModal] = useState(false);
+  const [profileName, setProfileName] = useState('');
+  const [profilePhoto, setProfilePhoto] = useState('');
+  const [profileBio, setProfileBio] = useState('');
+  const [profileSpecialties, setProfileSpecialties] = useState('');
+  const [isCompressingBarberPhoto, setIsCompressingBarberPhoto] = useState(false);
+  const [saveSuccessToast, setSaveSuccessToast] = useState(false);
+  const barberPhotoInputRef = useRef<HTMLInputElement>(null);
 
   const currentBarber = barbers.find((b) => b.id === activeBarberId) || barbers[0];
 
@@ -94,6 +110,51 @@ export const BarberDashboard: React.FC = () => {
     } else {
       setPinError(true);
     }
+  };
+
+  useEffect(() => {
+    if (currentBarber) {
+      setProfileName(currentBarber.name);
+      setProfilePhoto(currentBarber.photo_url);
+      setProfileBio(currentBarber.bio);
+      setProfileSpecialties(currentBarber.specialties.join(', '));
+    }
+  }, [currentBarber]);
+
+  const handleBarberPhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      setIsCompressingBarberPhoto(true);
+      const compressed = await compressImageFile(file, { maxWidth: 500, maxHeight: 500, quality: 0.82 });
+      setProfilePhoto(compressed);
+    } catch (err) {
+      console.error(err);
+      alert('Could not process photo. Please choose a valid image file.');
+    } finally {
+      setIsCompressingBarberPhoto(false);
+      e.target.value = '';
+    }
+  };
+
+  const handleSaveProfile = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!profileName.trim()) {
+      alert('Please enter a barber name.');
+      return;
+    }
+
+    updateBarber({
+      ...currentBarber,
+      name: profileName.trim(),
+      photo_url: profilePhoto.trim(),
+      bio: profileBio.trim(),
+      specialties: profileSpecialties.split(',').map((s) => s.trim()).filter(Boolean),
+    });
+
+    setSaveSuccessToast(true);
+    setTimeout(() => setSaveSuccessToast(false), 3000);
+    setShowEditProfileModal(false);
   };
 
   return (
@@ -208,9 +269,31 @@ export const BarberDashboard: React.FC = () => {
                 Go Offline
               </button>
             )}
+
+            <button
+              onClick={() => {
+                setProfileName(currentBarber.name);
+                setProfilePhoto(currentBarber.photo_url);
+                setProfileBio(currentBarber.bio);
+                setProfileSpecialties(currentBarber.specialties.join(', '));
+                setShowEditProfileModal(true);
+              }}
+              className="px-3 py-2 rounded-xl bg-amber-500/10 hover:bg-amber-500 hover:text-charcoal-950 text-amber-400 font-bold text-xs transition-colors flex items-center gap-1.5 border border-amber-500/30"
+              title="Change barber name, photo, and specialties"
+            >
+              <Edit className="w-3.5 h-3.5" />
+              <span>Edit Profile</span>
+            </button>
           </div>
         </div>
       </div>
+
+      {saveSuccessToast && (
+        <div className="fixed bottom-20 right-4 z-50 bg-emerald-500 text-charcoal-950 font-bold text-xs px-4 py-2.5 rounded-2xl shadow-xl flex items-center gap-2 animate-in fade-in slide-in-from-bottom-2">
+          <CheckCircle2 className="w-4 h-4 text-charcoal-950 stroke-[3]" />
+          <span>Barber profile and photo updated successfully!</span>
+        </div>
+      )}
 
       {/* ACTIVE CUSTOMER IN CHAIR (HERO WORKSTATION CARD) */}
       {activeServiceCustomer ? (
@@ -498,6 +581,160 @@ export const BarberDashboard: React.FC = () => {
               </div>
             ))
           )}
+        </div>
+      )}
+
+      {/* MODAL: EDIT BARBER PROFILE (NAME & PHOTO) */}
+      {showEditProfileModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-charcoal-900 border border-charcoal-700 rounded-3xl max-w-md w-full p-6 shadow-2xl relative text-left max-h-[92vh] overflow-y-auto">
+            <button
+              onClick={() => setShowEditProfileModal(false)}
+              className="absolute top-4 right-4 p-1.5 rounded-full text-slate-400 hover:text-white hover:bg-charcoal-800 transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="flex items-center gap-2 mb-4">
+              <div className="w-9 h-9 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
+                <Scissors className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-white">Edit Barber Profile</h3>
+                <p className="text-xs text-slate-400">Update your name, picture, and specialties</p>
+              </div>
+            </div>
+
+            <form onSubmit={handleSaveProfile} className="space-y-4">
+              {/* Barber Name */}
+              <div>
+                <label className="block text-xs font-bold text-slate-300 mb-1">
+                  Barber Name <span className="text-amber-400">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={profileName}
+                  onChange={(e) => setProfileName(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-charcoal-950 border border-charcoal-700 text-white text-sm focus:outline-none focus:border-amber-500 font-semibold"
+                  placeholder="e.g. Farhaan Lone"
+                />
+              </div>
+
+              {/* Barber Photo Section */}
+              <div className="bg-charcoal-950 p-4 rounded-2xl border border-charcoal-800 space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-slate-300">Barber Photograph</label>
+                  <span className="text-[10px] text-amber-400">Camera / Gallery</span>
+                </div>
+
+                {/* Preview */}
+                <div className="flex items-center gap-4">
+                  <img
+                    src={profilePhoto || currentBarber.photo_url}
+                    alt="Preview"
+                    className="w-16 h-16 rounded-2xl object-cover border-2 border-amber-500/50 shadow-md flex-shrink-0"
+                  />
+                  <div className="flex-1 space-y-1.5">
+                    <input
+                      ref={barberPhotoInputRef}
+                      type="file"
+                      accept="image/*"
+                      onChange={handleBarberPhotoUpload}
+                      className="hidden"
+                    />
+                    <button
+                      type="button"
+                      disabled={isCompressingBarberPhoto}
+                      onClick={() => barberPhotoInputRef.current?.click()}
+                      className="w-full py-2.5 px-3 rounded-xl bg-charcoal-800 hover:bg-charcoal-700 disabled:opacity-50 text-amber-400 font-bold text-xs border border-charcoal-700 transition-colors flex items-center justify-center gap-2"
+                    >
+                      <Camera className="w-4 h-4" />
+                      <span>{isCompressingBarberPhoto ? 'Optimizing Image...' : 'Upload from Phone / PC'}</span>
+                    </button>
+                    <p className="text-[10px] text-slate-500 text-center">
+                      Auto-compressed & stored locally (PNG, JPG, WEBP)
+                    </p>
+                  </div>
+                </div>
+
+                {/* Avatars */}
+                <div>
+                  <span className="text-[10px] text-slate-400 font-semibold block mb-1.5">
+                    Or select an instant avatar:
+                  </span>
+                  <div className="grid grid-cols-6 gap-1.5">
+                    {[
+                      'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&auto=format&fit=crop&q=80',
+                      'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=400&auto=format&fit=crop&q=80',
+                      'https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?w=400&auto=format&fit=crop&q=80',
+                      'https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=400&auto=format&fit=crop&q=80',
+                      'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=400&auto=format&fit=crop&q=80',
+                      'https://images.unsplash.com/photo-1583863788434-e58a36330cf0?w=400&auto=format&fit=crop&q=80',
+                    ].map((avatarUrl, idx) => (
+                      <button
+                        type="button"
+                        key={idx}
+                        onClick={() => setProfilePhoto(avatarUrl)}
+                        className={`aspect-square rounded-xl overflow-hidden border-2 transition-transform hover:scale-105 ${
+                          profilePhoto === avatarUrl
+                            ? 'border-amber-400 ring-2 ring-amber-400/30'
+                            : 'border-charcoal-700 opacity-70 hover:opacity-100'
+                        }`}
+                      >
+                        <img src={avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Direct URL */}
+                <div>
+                  <label className="text-[10px] text-slate-400 block mb-1">Or paste web photo URL:</label>
+                  <input
+                    type="url"
+                    placeholder="https://..."
+                    value={profilePhoto}
+                    onChange={(e) => setProfilePhoto(e.target.value)}
+                    className="w-full px-3 py-1.5 rounded-lg bg-charcoal-900 border border-charcoal-700 text-slate-300 text-xs focus:outline-none focus:border-amber-500 font-mono"
+                  />
+                </div>
+              </div>
+
+              {/* Specialties */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">
+                  Specialties (Comma-separated)
+                </label>
+                <input
+                  type="text"
+                  placeholder="Skin Fade, Beard Trim, Hot Towel"
+                  value={profileSpecialties}
+                  onChange={(e) => setProfileSpecialties(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl bg-charcoal-950 border border-charcoal-700 text-white text-xs"
+                />
+              </div>
+
+              {/* Bio */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">Short Bio</label>
+                <textarea
+                  rows={2}
+                  value={profileBio}
+                  onChange={(e) => setProfileBio(e.target.value)}
+                  placeholder="Brief introduction..."
+                  className="w-full px-3 py-2 rounded-xl bg-charcoal-950 border border-charcoal-700 text-white text-xs"
+                />
+              </div>
+
+              <button
+                type="submit"
+                className="w-full py-3.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-charcoal-950 font-black text-sm tracking-wide transition-all shadow-lg shadow-amber-500/20"
+              >
+                Save Barber Profile & Photo
+              </button>
+            </form>
+          </div>
         </div>
       )}
     </div>
