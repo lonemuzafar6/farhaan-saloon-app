@@ -34,6 +34,11 @@ export const StorageEngine = {
       const data = localStorage.getItem(STORAGE_KEYS.SETTINGS);
       if (data) {
         const parsed = JSON.parse(data);
+        if (!parsed.address || parsed.address.includes('Shop No. 4') || parsed.address.includes('City Centre Commercial Plaza')) {
+          parsed.address = INITIAL_SETTINGS.address;
+          parsed.city = INITIAL_SETTINGS.city;
+          localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify({ ...INITIAL_SETTINGS, ...parsed }));
+        }
         return { ...INITIAL_SETTINGS, ...parsed, admin_pin: parsed.admin_pin || '600622' };
       }
       return INITIAL_SETTINGS;

@@ -1,4 +1,4 @@
-# Farhaan Men's Saloon — Smart Queue & Barber Appointment PWA
+# Farhaan Men's Saloon — Smart Queue & Barber Appointment App
 
 > **Engineered by:** **Dr. Mohd Muzzafar Lone**  
 > **Contact & WhatsApp:** **+91 6006225007**  

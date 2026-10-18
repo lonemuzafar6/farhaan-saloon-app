@@ -60,7 +60,7 @@ export const InstallPWA: React.FC = () => {
           </div>
           <div>
             <h4 className="text-sm font-bold text-white flex items-center gap-1.5">
-              <span>Install Farhaan Saloon PWA</span>
+              <span>Install Farhaan Saloon</span>
               <span className="text-[10px] bg-amber-500/20 text-amber-300 px-1.5 py-0.5 rounded font-mono font-normal">Fast & Offline</span>
             </h4>
             <p className="text-xs text-slate-400">
@@ -104,7 +104,7 @@ export const InstallPWA: React.FC = () => {
             </h3>
 
             <p className="text-xs text-slate-300 mb-4">
-              To install this Progressive Web App without app store downloads:
+              To install this app directly on your home screen:
             </p>
 
             <div className="space-y-3 text-xs text-slate-300">

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'farhaan-saloon-cache-v2';
+const CACHE_NAME = 'farhaan-saloon-cache-v3';
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
