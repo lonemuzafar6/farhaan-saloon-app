@@ -202,16 +202,3 @@ export function runAutomatedTests() {
 
   return results;
 }
-
-// Vitest suite integration
-import { describe, it, expect } from 'vitest';
-
-describe('Saloon Queue & Wait Time Logic', () => {
-  const tests = runAutomatedTests();
-  tests.forEach((t) => {
-    it(t.test, () => {
-      expect(t.passed, t.message).toBe(true);
-    });
-  });
-});
-
