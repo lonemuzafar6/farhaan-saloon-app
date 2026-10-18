@@ -16,6 +16,7 @@ import {
   ChevronRight,
   Flame,
   ArrowRight,
+  QrCode,
 } from 'lucide-react';
 import { useSaloon } from '../../context/SaloonContext';
 import { calculateBarberWaitTime, calculateQueuePosition } from '../../lib/queueAlgorithm';
@@ -477,6 +478,28 @@ export const LiveQueueView: React.FC<LiveQueueViewProps> = ({
               <span>View Gallery</span>
               <ChevronRight className="w-3.5 h-3.5" />
             </button>
+          </div>
+
+          {/* In-Store Counter Standee & QR Pass */}
+          <div className="bg-charcoal-900/60 border border-charcoal-800 rounded-2xl p-3.5 flex items-center justify-between gap-3 text-xs">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="w-8 h-8 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 flex-shrink-0">
+                <QrCode className="w-4 h-4" />
+              </div>
+              <div className="min-w-0">
+                <p className="font-semibold text-slate-300 truncate">Visiting Farhaan Men's Saloon?</p>
+                <p className="text-[11px] text-slate-400 truncate">Scan our counter QR code or open printable standee</p>
+              </div>
+            </div>
+            <a
+              href="/counter-standee.html"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-amber-400 hover:text-amber-300 font-bold flex items-center gap-1 text-[11px] flex-shrink-0 bg-charcoal-850 px-2.5 py-1.5 rounded-lg border border-charcoal-700"
+            >
+              <span>View Standee</span>
+              <ChevronRight className="w-3.5 h-3.5" />
+            </a>
           </div>
         </div>
       )}

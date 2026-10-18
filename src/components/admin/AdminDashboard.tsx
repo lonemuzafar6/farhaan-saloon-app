@@ -30,6 +30,9 @@ import {
   ToggleRight,
   LogOut,
   Camera,
+  QrCode,
+  Printer,
+  Download,
 } from 'lucide-react';
 import { useSaloon } from '../../context/SaloonContext';
 import { calculateBarberWaitTime } from '../../lib/queueAlgorithm';
@@ -677,6 +680,18 @@ export const AdminDashboard: React.FC = () => {
               <span>Walk-in</span>
             </button>
 
+            <a
+              href="/counter-standee.html"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-3 py-2 rounded-xl bg-charcoal-800 hover:bg-amber-500/20 text-amber-400 hover:text-amber-300 text-xs font-semibold border border-amber-500/30 transition-colors flex items-center gap-1.5"
+              title="Open and Print Salon QR Counter Standee"
+            >
+              <QrCode className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">QR Standee</span>
+              <span className="sm:hidden">QR</span>
+            </a>
+
             <button
               onClick={handleLogout}
               className="px-3 py-2 rounded-xl bg-charcoal-800 hover:bg-rose-600/20 text-slate-300 hover:text-rose-400 text-xs font-semibold border border-charcoal-700 transition-colors flex items-center gap-1.5"
@@ -1172,6 +1187,53 @@ export const AdminDashboard: React.FC = () => {
             <p className="text-xs text-slate-400 mt-1">
               Changes reflect instantly across the entire app for all customers and barbers.
             </p>
+          </div>
+
+          {/* Official Salon QR Card */}
+          <div className="bg-gradient-to-r from-charcoal-950 to-charcoal-900 border border-amber-500/40 rounded-2xl p-4 flex flex-col sm:flex-row items-center gap-4">
+            <div className="p-2 bg-white rounded-xl shadow-md flex-shrink-0">
+              <img
+                src="/farhaan-saloon-qr.png"
+                alt="Farhaan Saloon QR Code"
+                className="w-24 h-24 object-contain"
+              />
+            </div>
+            <div className="flex-1 text-center sm:text-left">
+              <span className="text-[10px] text-amber-400 font-bold uppercase tracking-wider">
+                Counter Display & Customer Scanning
+              </span>
+              <h4 className="text-sm font-bold text-white mt-0.5">Official Salon QR Code</h4>
+              <p className="text-xs text-slate-300 mt-1">
+                Point any phone camera to access the live salon queue. Ready for counter stands and mirrors.
+              </p>
+              <div className="flex flex-wrap gap-2 mt-3 justify-center sm:justify-start">
+                <a
+                  href="/counter-standee.html"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-charcoal-950 font-bold text-xs flex items-center gap-1.5 shadow"
+                >
+                  <Printer className="w-3.5 h-3.5" />
+                  <span>Print Standee (A4)</span>
+                </a>
+                <a
+                  href="/farhaan-saloon-qr.png"
+                  download="farhaan-saloon-qr.png"
+                  className="px-3 py-1.5 rounded-lg bg-charcoal-800 hover:bg-charcoal-700 text-slate-200 text-xs font-semibold border border-charcoal-700 flex items-center gap-1.5"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>PNG</span>
+                </a>
+                <a
+                  href="/farhaan-saloon-qr.svg"
+                  download="farhaan-saloon-qr.svg"
+                  className="px-3 py-1.5 rounded-lg bg-charcoal-800 hover:bg-charcoal-700 text-slate-200 text-xs font-semibold border border-charcoal-700 flex items-center gap-1.5"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>SVG</span>
+                </a>
+              </div>
+            </div>
           </div>
 
           <form onSubmit={handleSaveSalonInfo} className="space-y-4">

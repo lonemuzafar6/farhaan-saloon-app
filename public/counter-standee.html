@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Farhaan Men's Saloon - Counter QR Standee</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800;900&family=Playfair+Display:ital,wght@0,700;1,700&display=swap" rel="stylesheet">
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      font-family: 'Plus Jakarta Sans', -apple-system, sans-serif;
+      background: #0d0e12;
+      color: #ffffff;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 24px;
+    }
+    .print-bar {
+      margin-bottom: 20px;
+      display: flex;
+      gap: 12px;
+    }
+    .btn {
+      background: #f59e0b;
+      color: #111217;
+      font-weight: 800;
+      font-size: 14px;
+      padding: 12px 24px;
+      border-radius: 12px;
+      border: none;
+      cursor: pointer;
+      box-shadow: 0 4px 14px rgba(245, 158, 11, 0.35);
+      transition: all 0.2s ease;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .btn:hover {
+      background: #fbbf24;
+      transform: translateY(-1px);
+    }
+    .btn-secondary {
+      background: #1f222b;
+      color: #cbd5e1;
+      box-shadow: none;
+      border: 1px solid #333846;
+    }
+    .btn-secondary:hover {
+      background: #2a2e3a;
+      color: #ffffff;
+    }
+    .standee {
+      width: 100%;
+      max-width: 480px;
+      background: linear-gradient(165deg, #181a22 0%, #111217 60%, #1f1b13 100%);
+      border: 3px solid #d97706;
+      border-radius: 36px;
+      padding: 40px 32px 32px;
+      text-align: center;
+      box-shadow: 0 25px 60px rgba(0, 0, 0, 0.8), 0 0 40px rgba(217, 119, 6, 0.15);
+      position: relative;
+      overflow: hidden;
+    }
+    .standee::before {
+      content: "";
+      position: absolute;
+      top: -120px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 280px;
+      height: 280px;
+      background: radial-gradient(circle, rgba(245, 158, 11, 0.15) 0%, transparent 70%);
+      pointer-events: none;
+    }
+    .badge {
+      display: inline-block;
+      background: rgba(245, 158, 11, 0.15);
+      border: 1px solid rgba(245, 158, 11, 0.4);
+      color: #fbbf24;
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      padding: 6px 16px;
+      border-radius: 20px;
+      margin-bottom: 16px;
+    }
+    .salon-name {
+      font-family: 'Playfair Display', serif;
+      font-size: 32px;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+      color: #ffffff;
+      margin-bottom: 6px;
+      line-height: 1.15;
+    }
+    .tagline {
+      font-size: 13px;
+      color: #fbbf24;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      margin-bottom: 24px;
+    }
+    .qr-card {
+      background: #ffffff;
+      border-radius: 28px;
+      padding: 20px;
+      display: inline-block;
+      box-shadow: 0 15px 35px rgba(0, 0, 0, 0.5), 0 0 0 6px rgba(245, 158, 11, 0.3);
+      margin-bottom: 24px;
+      transition: transform 0.2s ease;
+    }
+    .qr-card img, .qr-card svg {
+      display: block;
+      width: 240px;
+      height: 240px;
+    }
+    .cta-heading {
+      font-size: 20px;
+      font-weight: 900;
+      color: #ffffff;
+      letter-spacing: -0.3px;
+      margin-bottom: 6px;
+    }
+    .cta-sub {
+      font-size: 13px;
+      color: #94a3b8;
+      max-width: 380px;
+      margin: 0 auto 20px;
+      line-height: 1.5;
+    }
+    .features-pill {
+      display: flex;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 24px;
+    }
+    .pill {
+      background: #181a22;
+      border: 1px solid #282c38;
+      color: #e2e8f0;
+      font-size: 11px;
+      font-weight: 600;
+      padding: 6px 12px;
+      border-radius: 12px;
+    }
+    .address-card {
+      background: rgba(17, 18, 23, 0.7);
+      border: 1px solid #282c38;
+      border-radius: 20px;
+      padding: 14px 16px;
+      font-size: 12px;
+      color: #cbd5e1;
+      line-height: 1.4;
+      margin-bottom: 18px;
+    }
+    .address-card strong {
+      color: #fbbf24;
+      display: block;
+      margin-bottom: 3px;
+    }
+    .credit {
+      font-size: 10px;
+      color: #64748b;
+      letter-spacing: 0.3px;
+    }
+    .credit a {
+      color: #fbbf24;
+      text-decoration: none;
+      font-weight: bold;
+    }
+
+    @media print {
+      body {
+        background: #ffffff;
+        color: #000000;
+        padding: 0;
+      }
+      .print-bar {
+        display: none !important;
+      }
+      .standee {
+        border: 2px solid #000000;
+        box-shadow: none;
+        max-width: 100%;
+        page-break-inside: avoid;
+        background: #ffffff;
+        color: #000000;
+      }
+      .badge {
+        background: #f1f5f9;
+        border-color: #000000;
+        color: #000000;
+      }
+      .salon-name, .cta-heading {
+        color: #000000;
+      }
+      .tagline, .address-card strong {
+        color: #b45309;
+      }
+      .cta-sub, .credit {
+        color: #475569;
+      }
+      .pill {
+        border-color: #cbd5e1;
+        color: #0f172a;
+        background: #f8fafc;
+      }
+      .address-card {
+        border-color: #cbd5e1;
+        color: #1e293b;
+        background: #f8fafc;
+      }
+      .qr-card {
+        box-shadow: 0 0 0 2px #000000;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="print-bar">
+    <button class="btn" onclick="window.print()">
+      🖨️ Print Salon Standee (A4 / Stand)
+    </button>
+    <a href="/farhaan-saloon-qr.png" download="farhaan-saloon-qr.png" class="btn btn-secondary">
+      ⬇️ Download QR Image (PNG)
+    </a>
+  </div>
+
+  <div class="standee">
+    <div class="badge">Official Customer QR Pass</div>
+    <h1 class="salon-name">Farhaan Men's Saloon</h1>
+    <div class="tagline">Master Barbers • Modern Grooming & Precision Cuts</div>
+
+    <div class="qr-card">
+      <img src="/farhaan-saloon-qr.png" alt="Farhaan Men's Saloon QR Code">
+    </div>
+
+    <h2 class="cta-heading">Scan with your Phone Camera</h2>
+    <p class="cta-sub">
+      Point any smartphone camera to check live waiting times, choose your favourite barber, and get your digital token instantly.
+    </p>
+
+    <div class="features-pill">
+      <span class="pill">⚡ Instant Digital Token</span>
+      <span class="pill">⏱️ Real-Time Wait Times</span>
+      <span class="pill">✂️ 4 Master Barbers</span>
+      <span class="pill">💈 20+ Trending Styles</span>
+    </div>
+
+    <div class="address-card">
+      <strong>📍 Salon Location:</strong>
+      Handwara New Bus Stand Road, Near SRS textiles,<br>
+      Opposite City Choice Handwara (9:00 AM – 9:00 PM)
+    </div>
+
+    <div class="credit">
+      App Engineered by <strong>Dr. Mohd Muzzafar Lone</strong> • Phone: <a href="tel:+916006225007">+91 6006225007</a>
+    </div>
+  </div>
+
+</body>
+</html>
