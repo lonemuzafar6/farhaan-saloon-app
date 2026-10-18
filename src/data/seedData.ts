@@ -20,6 +20,7 @@ export const INITIAL_SETTINGS: SalonSettings = {
   advance_booking_days: 7,
   creator_name: "Dr. Mohd Muzzafar Lone",
   creator_phone: "+916006225007",
+  admin_pin: "600622",
 };
 
 export const INITIAL_BARBERS: Barber[] = [

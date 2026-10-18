@@ -32,7 +32,11 @@ export const StorageEngine = {
   getSettings(): SalonSettings {
     try {
       const data = localStorage.getItem(STORAGE_KEYS.SETTINGS);
-      return data ? JSON.parse(data) : INITIAL_SETTINGS;
+      if (data) {
+        const parsed = JSON.parse(data);
+        return { ...INITIAL_SETTINGS, ...parsed, admin_pin: parsed.admin_pin || '600622' };
+      }
+      return INITIAL_SETTINGS;
     } catch {
       return INITIAL_SETTINGS;
     }

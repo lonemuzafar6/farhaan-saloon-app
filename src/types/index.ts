@@ -126,6 +126,7 @@ export interface SalonSettings {
   advance_booking_days: number;
   creator_name: string;
   creator_phone: string;
+  admin_pin: string; // 6-digit security PIN for owner admin
 }
 
 export interface AuditLog {

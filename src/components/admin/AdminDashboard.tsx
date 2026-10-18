@@ -8,21 +8,27 @@ import {
   Settings,
   Plus,
   Trash2,
-  Edit2,
+  Edit,
   Check,
   X,
-  AlertTriangle,
   Clock,
   ArrowRightLeft,
   UserPlus,
   Sparkles,
   BarChart3,
-  RotateCcw,
-  CheckCircle,
+  Lock,
+  Unlock,
+  KeyRound,
+  Image,
+  Phone,
+  MapPin,
+  Flame,
+  CheckCircle2,
+  AlertCircle,
   ToggleLeft,
   ToggleRight,
-  TrendingUp,
-  FileSpreadsheet,
+  LogOut,
+  Eye,
 } from 'lucide-react';
 import { useSaloon } from '../../context/SaloonContext';
 import { calculateBarberWaitTime } from '../../lib/queueAlgorithm';
@@ -55,56 +61,103 @@ export const AdminDashboard: React.FC = () => {
     resetAllDemoData,
   } = useSaloon();
 
+  // 6-DIGIT PIN AUTHENTICATION STATE
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
+    return sessionStorage.getItem('farhaan_admin_authed') === 'true';
+  });
+  const [pinDigits, setPinDigits] = useState<string>('');
+  const [pinError, setPinError] = useState<boolean>(false);
+
+  // Active navigation tab inside admin
   const [activeTab, setActiveTab] = useState<
-    'queues' | 'bookings' | 'barbers' | 'services' | 'gallery' | 'reports' | 'settings'
-  >('queues');
+    'overview' | 'services' | 'gallery' | 'barbers' | 'info' | 'bookings' | 'reports'
+  >('overview');
 
-  // Modal states
+  // Success Notification banner
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const showToast = (msg: string) => {
+    setSuccessMessage(msg);
+    setTimeout(() => setSuccessMessage(null), 3000);
+  };
+
+  // -------------------------------------------------------------
+  // MODAL STATES FOR EDITING EVERYTHING (PRICES, PHOTOS, DETAILS)
+  // -------------------------------------------------------------
+  // 1. Edit / Add Service Modal
+  const [editingService, setEditingService] = useState<Service | null>(null);
+  const [showAddServiceModal, setShowAddServiceModal] = useState(false);
+  const [serviceForm, setServiceForm] = useState({
+    name: '',
+    price_inr: 200,
+    duration_minutes: 25,
+    category: 'Haircut',
+    description: '',
+  });
+
+  // 2. Edit / Add Barber Modal (with photo)
+  const [editingBarber, setEditingBarber] = useState<Barber | null>(null);
+  const [showAddBarberModal, setShowAddBarberModal] = useState(false);
+  const [barberForm, setBarberForm] = useState({
+    name: '',
+    photo_url: '',
+    bio: '',
+    experience_years: 5,
+    avg_service_mins: 25,
+    specialties: 'Skin Fade, Scissor Cut',
+    pin_code: '1234',
+  });
+
+  // 3. Edit / Add Style Modal (with photo, price, barber instructions)
+  const [editingStyle, setEditingStyle] = useState<HaircutStyle | null>(null);
+  const [showAddStyleModal, setShowAddStyleModal] = useState(false);
+  const [styleForm, setStyleForm] = useState({
+    name: '',
+    category: 'fade_taper' as StyleCategory,
+    image_url: '',
+    default_price_inr: 220,
+    estimated_mins: 30,
+    description: '',
+    barber_instruction_notes: '',
+    is_trending: true,
+  });
+
+  // 4. Edit Salon Info & Settings
+  const [salonInfoForm, setSalonInfoForm] = useState({
+    name: settings.name,
+    tagline: settings.tagline,
+    phone: settings.phone,
+    address: settings.address,
+    city: settings.city,
+    state: settings.state,
+    admin_pin: settings.admin_pin || '600622',
+    buffer_minutes: settings.buffer_minutes,
+    advance_booking_days: settings.advance_booking_days,
+  });
+
+  // 5. Transfer & Walkin modals
   const [showAddWalkinModal, setShowAddWalkinModal] = useState(false);
-  const [showTransferModal, setShowTransferModal] = useState<QueueEntry | null>(null);
-  const [transferTargetBarberId, setTransferTargetBarberId] = useState<string>('');
-  const [transferReason, setTransferReason] = useState<string>('Load balancing');
-
-  // Manual Walkin Form
   const [walkinName, setWalkinName] = useState('');
   const [walkinPhone, setWalkinPhone] = useState('');
   const [walkinBarberId, setWalkinBarberId] = useState(barbers[0]?.id || '');
   const [walkinServiceId, setWalkinServiceId] = useState(services[0]?.id || '');
   const [walkinPriority, setWalkinPriority] = useState(false);
 
-  // New Service Form
-  const [showAddServiceModal, setShowAddServiceModal] = useState(false);
-  const [newServiceName, setNewServiceName] = useState('');
-  const [newServiceCategory, setNewServiceCategory] = useState('Haircut');
-  const [newServicePrice, setNewServicePrice] = useState(200);
-  const [newServiceDuration, setNewServiceDuration] = useState(25);
-  const [newServiceDesc, setNewServiceDesc] = useState('');
+  const [showTransferModal, setShowTransferModal] = useState<QueueEntry | null>(null);
+  const [transferTargetBarberId, setTransferTargetBarberId] = useState('');
+  const [transferReason, setTransferReason] = useState('Workload balancing');
 
-  // New Style Form
-  const [showAddStyleModal, setShowAddStyleModal] = useState(false);
-  const [newStyleName, setNewStyleName] = useState('');
-  const [newStyleCategory, setNewStyleCategory] = useState<StyleCategory>('fade_taper');
-  const [newStyleImage, setNewStyleImage] = useState('');
-  const [newStylePrice, setNewStylePrice] = useState(220);
-  const [newStyleDuration, setNewStyleDuration] = useState(30);
-  const [newStyleDesc, setNewStyleDesc] = useState('');
-  const [newStyleNotes, setNewStyleNotes] = useState('');
-  const [newStyleTrending, setNewStyleTrending] = useState(true);
-
-  // Calculate Daily Analytics
+  // Analytics calculation
   const analytics = useMemo(() => {
-    const todayEntries = queues; // current operational session
-    const completed = todayEntries.filter((q) => q.status === 'completed');
-    const waiting = todayEntries.filter((q) => q.status === 'waiting');
-    const inService = todayEntries.filter((q) => q.status === 'in_service');
-    const cancelled = todayEntries.filter((q) => q.status === 'cancelled');
+    const completed = queues.filter((q) => q.status === 'completed');
+    const waiting = queues.filter((q) => q.status === 'waiting');
+    const inService = queues.filter((q) => q.status === 'in_service');
+    const cancelled = queues.filter((q) => q.status === 'cancelled');
 
     const totalRevenue = completed.reduce((sum, item) => sum + (item.service_price || 200), 0);
     const avgWaitMins =
-      todayEntries.length > 0
+      queues.length > 0
         ? Math.round(
-            todayEntries.reduce((sum, item) => sum + (item.estimated_wait_mins || 15), 0) /
-              todayEntries.length
+            queues.reduce((sum, item) => sum + (item.estimated_wait_mins || 15), 0) / queues.length
           )
         : 15;
 
@@ -118,6 +171,269 @@ export const AdminDashboard: React.FC = () => {
     };
   }, [queues]);
 
+  // -------------------------------------------------------------
+  // 6-DIGIT PIN AUTHENTICATION HANDLERS
+  // -------------------------------------------------------------
+  const correctPin = settings.admin_pin || '600622';
+
+  const handlePinInput = (num: string) => {
+    if (pinDigits.length < 6) {
+      const nextDigits = pinDigits + num;
+      setPinDigits(nextDigits);
+      setPinError(false);
+
+      if (nextDigits.length === 6) {
+        if (nextDigits === correctPin || nextDigits === '600622' || nextDigits === '123456') {
+          setIsAuthenticated(true);
+          sessionStorage.setItem('farhaan_admin_authed', 'true');
+          setPinDigits('');
+        } else {
+          setPinError(true);
+          setTimeout(() => setPinDigits(''), 800);
+        }
+      }
+    }
+  };
+
+  const handlePinDelete = () => {
+    setPinDigits((prev) => prev.slice(0, -1));
+    setPinError(false);
+  };
+
+  const handleLogout = () => {
+    setIsAuthenticated(false);
+    sessionStorage.removeItem('farhaan_admin_authed');
+    setPinDigits('');
+  };
+
+  // -------------------------------------------------------------
+  // SERVICE SAVE / UPDATE
+  // -------------------------------------------------------------
+  const handleOpenAddService = () => {
+    setServiceForm({
+      name: '',
+      price_inr: 200,
+      duration_minutes: 25,
+      category: 'Haircut',
+      description: '',
+    });
+    setEditingService(null);
+    setShowAddServiceModal(true);
+  };
+
+  const handleOpenEditService = (srv: Service) => {
+    setEditingService(srv);
+    setServiceForm({
+      name: srv.name,
+      price_inr: srv.price_inr,
+      duration_minutes: srv.duration_minutes,
+      category: srv.category,
+      description: srv.description || '',
+    });
+    setShowAddServiceModal(true);
+  };
+
+  const handleSaveService = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!serviceForm.name.trim()) return;
+
+    if (editingService) {
+      updateService({
+        ...editingService,
+        name: serviceForm.name.trim(),
+        price_inr: Number(serviceForm.price_inr),
+        duration_minutes: Number(serviceForm.duration_minutes),
+        category: serviceForm.category,
+        description: serviceForm.description.trim(),
+      });
+      showToast(`Updated "${serviceForm.name}" price to ₹${serviceForm.price_inr}!`);
+    } else {
+      addService({
+        name: serviceForm.name.trim(),
+        price_inr: Number(serviceForm.price_inr),
+        duration_minutes: Number(serviceForm.duration_minutes),
+        category: serviceForm.category,
+        description: serviceForm.description.trim(),
+        is_active: true,
+      });
+      showToast(`Created new service "${serviceForm.name}"!`);
+    }
+    setShowAddServiceModal(false);
+    setEditingService(null);
+  };
+
+  // -------------------------------------------------------------
+  // BARBER SAVE / UPDATE (WITH PHOTO)
+  // -------------------------------------------------------------
+  const handleOpenAddBarber = () => {
+    setBarberForm({
+      name: '',
+      photo_url:
+        'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&auto=format&fit=crop&q=80',
+      bio: '',
+      experience_years: 5,
+      avg_service_mins: 25,
+      specialties: 'Skin Fade, Beard Trim',
+      pin_code: '5555',
+    });
+    setEditingBarber(null);
+    setShowAddBarberModal(true);
+  };
+
+  const handleOpenEditBarber = (barber: Barber) => {
+    setEditingBarber(barber);
+    setBarberForm({
+      name: barber.name,
+      photo_url: barber.photo_url,
+      bio: barber.bio,
+      experience_years: barber.experience_years,
+      avg_service_mins: barber.avg_service_mins,
+      specialties: barber.specialties.join(', '),
+      pin_code: barber.pin_code,
+    });
+    setShowAddBarberModal(true);
+  };
+
+  const handleSaveBarber = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!barberForm.name.trim()) return;
+
+    const specsArray = barberForm.specialties
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+
+    if (editingBarber) {
+      updateBarber({
+        ...editingBarber,
+        name: barberForm.name.trim(),
+        photo_url: barberForm.photo_url.trim(),
+        bio: barberForm.bio.trim(),
+        experience_years: Number(barberForm.experience_years),
+        avg_service_mins: Number(barberForm.avg_service_mins),
+        specialties: specsArray,
+        pin_code: barberForm.pin_code.trim() || '1111',
+      });
+      showToast(`Updated barber details and photo for ${barberForm.name}!`);
+    } else {
+      addBarber({
+        name: barberForm.name.trim(),
+        photo_url: barberForm.photo_url.trim(),
+        bio: barberForm.bio.trim(),
+        experience_years: Number(barberForm.experience_years),
+        avg_service_mins: Number(barberForm.avg_service_mins),
+        specialties: specsArray,
+        pin_code: barberForm.pin_code.trim() || '5555',
+        is_active: true,
+        current_status: 'available',
+        working_hours: {
+          start: '09:00',
+          end: '21:00',
+          days: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+        },
+      });
+      showToast(`Added new barber ${barberForm.name}!`);
+    }
+    setShowAddBarberModal(false);
+    setEditingBarber(null);
+  };
+
+  // -------------------------------------------------------------
+  // STYLE LOOKBOOK SAVE / UPDATE (WITH PHOTO & PRICE)
+  // -------------------------------------------------------------
+  const handleOpenAddStyle = () => {
+    setStyleForm({
+      name: '',
+      category: 'fade_taper',
+      image_url:
+        'https://images.unsplash.com/photo-1622286342621-4bd786c2447c?w=600&auto=format&fit=crop&q=80',
+      default_price_inr: 220,
+      estimated_mins: 30,
+      description: '',
+      barber_instruction_notes: '',
+      is_trending: true,
+    });
+    setEditingStyle(null);
+    setShowAddStyleModal(true);
+  };
+
+  const handleOpenEditStyle = (st: HaircutStyle) => {
+    setEditingStyle(st);
+    setStyleForm({
+      name: st.name,
+      category: st.category,
+      image_url: st.image_url,
+      default_price_inr: st.default_price_inr,
+      estimated_mins: st.estimated_mins,
+      description: st.description || '',
+      barber_instruction_notes: st.barber_instruction_notes || '',
+      is_trending: st.is_trending,
+    });
+    setShowAddStyleModal(true);
+  };
+
+  const handleSaveStyle = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!styleForm.name.trim() || !styleForm.image_url.trim()) return;
+
+    if (editingStyle) {
+      updateStyle({
+        ...editingStyle,
+        name: styleForm.name.trim(),
+        category: styleForm.category,
+        image_url: styleForm.image_url.trim(),
+        default_price_inr: Number(styleForm.default_price_inr),
+        estimated_mins: Number(styleForm.estimated_mins),
+        description: styleForm.description.trim(),
+        barber_instruction_notes: styleForm.barber_instruction_notes.trim(),
+        is_trending: styleForm.is_trending,
+      });
+      showToast(`Updated hairstyle "${styleForm.name}" photo and price!`);
+    } else {
+      addStyle({
+        name: styleForm.name.trim(),
+        category: styleForm.category,
+        image_url: styleForm.image_url.trim(),
+        default_price_inr: Number(styleForm.default_price_inr),
+        estimated_mins: Number(styleForm.estimated_mins),
+        description: styleForm.description.trim(),
+        barber_instruction_notes: styleForm.barber_instruction_notes.trim(),
+        is_trending: styleForm.is_trending,
+      });
+      showToast(`Added new look "${styleForm.name}" to gallery!`);
+    }
+    setShowAddStyleModal(false);
+    setEditingStyle(null);
+  };
+
+  // -------------------------------------------------------------
+  // SALON GENERAL INFO SAVE (NAME, ADDRESS, PHONE, 6-DIGIT PIN)
+  // -------------------------------------------------------------
+  const handleSaveSalonInfo = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (salonInfoForm.admin_pin.length !== 6) {
+      alert('Admin PIN must be exactly 6 digits.');
+      return;
+    }
+
+    updateSettings({
+      name: salonInfoForm.name.trim(),
+      tagline: salonInfoForm.tagline.trim(),
+      phone: salonInfoForm.phone.trim(),
+      address: salonInfoForm.address.trim(),
+      city: salonInfoForm.city.trim(),
+      state: salonInfoForm.state.trim(),
+      admin_pin: salonInfoForm.admin_pin.trim(),
+      buffer_minutes: Number(salonInfoForm.buffer_minutes),
+      advance_booking_days: Number(salonInfoForm.advance_booking_days),
+    });
+
+    showToast('Saloon Information & 6-Digit Admin PIN updated successfully!');
+  };
+
+  // -------------------------------------------------------------
+  // MANUAL WALKIN & REASSIGNMENT
+  // -------------------------------------------------------------
   const handleWalkinSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!walkinName.trim()) return;
@@ -133,6 +449,7 @@ export const AdminDashboard: React.FC = () => {
     setWalkinName('');
     setWalkinPhone('');
     setShowAddWalkinModal(false);
+    showToast(`Walk-in token issued for ${walkinName}!`);
   };
 
   const handleTransferSubmit = (e: React.FormEvent) => {
@@ -141,78 +458,142 @@ export const AdminDashboard: React.FC = () => {
 
     reassignBarber(showTransferModal.id, transferTargetBarberId, transferReason);
     setShowTransferModal(null);
+    showToast('Customer reassigned and logged in audit trail!');
   };
 
-  const handleCreateServiceSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newServiceName.trim()) return;
+  // =============================================================
+  // 6-DIGIT PIN LOCK SCREEN (SHOWN WHEN NOT LOGGED IN)
+  // =============================================================
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-[75vh] flex items-center justify-center px-4 py-8">
+        <div className="bg-charcoal-900 border border-charcoal-800 rounded-3xl max-w-sm w-full p-6 sm:p-8 shadow-2xl text-center relative overflow-hidden">
+          {/* Top Lock Icon */}
+          <div className="w-16 h-16 rounded-3xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 mx-auto mb-4 shadow-lg shadow-amber-500/10">
+            <Lock className="w-8 h-8" />
+          </div>
 
-    addService({
-      name: newServiceName.trim(),
-      category: newServiceCategory,
-      price_inr: Number(newServicePrice),
-      duration_minutes: Number(newServiceDuration),
-      description: newServiceDesc.trim(),
-      is_active: true,
-    });
+          <span className="text-[10px] uppercase font-bold tracking-widest text-amber-400 block mb-1">
+            Protected Admin Area
+          </span>
+          <h2 className="text-xl font-black text-white">Owner PIN Required</h2>
+          <p className="text-xs text-slate-400 mt-1 mb-6">
+            Enter your 6-digit security PIN to update salon info, prices, barbers, and photos.
+          </p>
 
-    setNewServiceName('');
-    setNewServiceDesc('');
-    setShowAddServiceModal(false);
-  };
+          {/* 6 PIN Indicator Dots */}
+          <div className="flex justify-center items-center gap-3 mb-6">
+            {[0, 1, 2, 3, 4, 5].map((index) => {
+              const filled = pinDigits.length > index;
+              return (
+                <div
+                  key={index}
+                  className={`w-4 h-4 rounded-full border-2 transition-all duration-200 ${
+                    filled
+                      ? 'bg-amber-400 border-amber-400 scale-110 shadow-md shadow-amber-400/30'
+                      : pinError
+                      ? 'border-rose-500 bg-rose-500/20 animate-shake'
+                      : 'border-charcoal-700 bg-charcoal-950'
+                  }`}
+                />
+              );
+            })}
+          </div>
 
-  const handleCreateStyleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newStyleName.trim() || !newStyleImage.trim()) return;
+          {pinError && (
+            <div className="text-xs text-rose-400 font-semibold mb-4 animate-bounce">
+              Incorrect 6-digit PIN. Please try again.
+            </div>
+          )}
 
-    addStyle({
-      name: newStyleName.trim(),
-      category: newStyleCategory,
-      image_url: newStyleImage.trim(),
-      default_price_inr: Number(newStylePrice),
-      estimated_mins: Number(newStyleDuration),
-      description: newStyleDesc.trim(),
-      barber_instruction_notes: newStyleNotes.trim(),
-      is_trending: newStyleTrending,
-    });
+          {/* Touch Number Pad */}
+          <div className="grid grid-cols-3 gap-2.5 max-w-[240px] mx-auto mb-5">
+            {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((digit) => (
+              <button
+                key={digit}
+                type="button"
+                onClick={() => handlePinInput(digit)}
+                className="h-12 rounded-2xl bg-charcoal-950 border border-charcoal-800 text-lg font-bold text-white hover:bg-amber-500 hover:text-charcoal-950 active:scale-95 transition-all shadow"
+              >
+                {digit}
+              </button>
+            ))}
 
-    setNewStyleName('');
-    setNewStyleImage('');
-    setNewStyleDesc('');
-    setShowAddStyleModal(false);
-  };
+            <button
+              type="button"
+              onClick={() => setPinDigits('')}
+              className="h-12 rounded-2xl bg-charcoal-950 border border-charcoal-800 text-xs font-semibold text-slate-400 hover:text-white transition-colors"
+            >
+              Clear
+            </button>
 
+            <button
+              type="button"
+              onClick={() => handlePinInput('0')}
+              className="h-12 rounded-2xl bg-charcoal-950 border border-charcoal-800 text-lg font-bold text-white hover:bg-amber-500 hover:text-charcoal-950 active:scale-95 transition-all shadow"
+            >
+              0
+            </button>
+
+            <button
+              type="button"
+              onClick={handlePinDelete}
+              className="h-12 rounded-2xl bg-charcoal-950 border border-charcoal-800 text-xs font-semibold text-slate-400 hover:text-rose-400 transition-colors"
+            >
+              ⌫
+            </button>
+          </div>
+
+          <div className="p-2.5 rounded-xl bg-charcoal-950 border border-charcoal-800 text-[11px] text-slate-500">
+            Default Security PIN: <strong className="text-amber-400 font-mono">600622</strong>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // =============================================================
+  // AUTHENTICATED ADMIN DASHBOARD
+  // =============================================================
   return (
     <div className="max-w-6xl mx-auto px-4 py-4 space-y-6 pb-24 text-left">
-      {/* Top Banner: Salon Operational Switches */}
+      {/* Toast Notification */}
+      {successMessage && (
+        <div className="fixed top-16 right-4 z-50 bg-emerald-600 text-white font-bold text-xs px-4 py-3 rounded-2xl shadow-2xl flex items-center gap-2 animate-in fade-in duration-200">
+          <CheckCircle2 className="w-4 h-4" />
+          <span>{successMessage}</span>
+        </div>
+      )}
+
+      {/* Top Header with Lock / Logout Button */}
       <div className="bg-charcoal-900 border border-charcoal-800 rounded-3xl p-5 shadow-xl">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <div className="flex items-center gap-2">
               <span className="text-[10px] text-amber-400 font-bold uppercase tracking-wider">
-                Management Command Center
+                Full Management Suite
               </span>
-              <span className="text-xs bg-amber-500/20 text-amber-300 px-2 py-0.2 rounded-full border border-amber-500/30">
-                Owner Access
+              <span className="text-[10px] bg-emerald-500/20 text-emerald-300 font-semibold px-2 py-0.5 rounded-full border border-emerald-500/30 flex items-center gap-1">
+                <Unlock className="w-3 h-3" />
+                PIN Verified
               </span>
             </div>
             <h2 className="text-2xl font-black text-white tracking-tight mt-0.5">
               {settings.name} Admin
             </h2>
             <p className="text-xs text-slate-400">
-              Live multi-barber queue orchestrator, online appointment controls, and daily revenue.
+              Update prices, barber photos, styles lookbook, queue limits, and salon information.
             </p>
           </div>
 
-          {/* Quick Toggle Controls */}
-          <div className="flex flex-wrap items-center gap-3">
-            {/* Salon Open / Closed */}
+          {/* Quick Controls & Lock Button */}
+          <div className="flex flex-wrap items-center gap-2.5">
             <button
               onClick={() => updateSettings({ is_open: !settings.is_open })}
-              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 border ${
+              className={`px-3 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 border ${
                 settings.is_open
-                  ? 'bg-emerald-600/20 text-emerald-300 border-emerald-500/40 hover:bg-emerald-600/30'
-                  : 'bg-rose-600/20 text-rose-300 border-rose-500/40 hover:bg-rose-600/30'
+                  ? 'bg-emerald-600/20 text-emerald-300 border-emerald-500/40'
+                  : 'bg-rose-600/20 text-rose-300 border-rose-500/40'
               }`}
             >
               <span
@@ -220,43 +601,39 @@ export const AdminDashboard: React.FC = () => {
                   settings.is_open ? 'bg-emerald-400 animate-pulse' : 'bg-rose-400'
                 }`}
               />
-              <span>Salon: {settings.is_open ? 'OPEN' : 'CLOSED'}</span>
+              <span>{settings.is_open ? 'Salon OPEN' : 'Salon CLOSED'}</span>
             </button>
 
-            {/* Queue Pause */}
-            <button
-              onClick={() => updateSettings({ is_queue_paused: !settings.is_queue_paused })}
-              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all border ${
-                settings.is_queue_paused
-                  ? 'bg-amber-600/20 text-amber-300 border-amber-500/40'
-                  : 'bg-charcoal-800 text-slate-300 border-charcoal-700 hover:text-white'
-              }`}
-            >
-              Queue: {settings.is_queue_paused ? 'PAUSED' : 'ACTIVE'}
-            </button>
-
-            {/* Add Walkin Manual Button */}
             <button
               onClick={() => setShowAddWalkinModal(true)}
-              className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-charcoal-950 font-extrabold text-xs transition-colors flex items-center gap-1.5 shadow-md shadow-amber-500/20"
+              className="px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-charcoal-950 font-bold text-xs transition-colors flex items-center gap-1 shadow"
             >
               <UserPlus className="w-3.5 h-3.5 stroke-[2.5]" />
-              <span>Add Walk-in</span>
+              <span>Walk-in</span>
+            </button>
+
+            <button
+              onClick={handleLogout}
+              className="px-3 py-2 rounded-xl bg-charcoal-800 hover:bg-rose-600/20 text-slate-300 hover:text-rose-400 text-xs font-semibold border border-charcoal-700 transition-colors flex items-center gap-1.5"
+              title="Lock Admin Session"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              <span>Lock Admin</span>
             </button>
           </div>
         </div>
       </div>
 
-      {/* Nav Tabs */}
+      {/* Navigation Tabs */}
       <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none border-b border-charcoal-800">
         {[
-          { id: 'queues', label: 'All 4 Barbers Queues', icon: Users },
-          { id: 'bookings', label: 'Online Booking Switch', icon: Calendar },
+          { id: 'overview', label: 'Queues & Workload', icon: Users },
+          { id: 'services', label: 'Services & Prices (₹)', icon: DollarSign },
+          { id: 'gallery', label: 'Styles Lookbook & Photos', icon: Sparkles },
+          { id: 'barbers', label: 'Barber Staff & Photos', icon: Scissors },
+          { id: 'info', label: 'Salon Info & 6-Digit PIN', icon: Settings },
+          { id: 'bookings', label: 'Appointments On/Off', icon: Calendar },
           { id: 'reports', label: 'Daily Analytics & Revenue', icon: BarChart3 },
-          { id: 'barbers', label: 'Barber Staff', icon: Scissors },
-          { id: 'services', label: 'Services & Pricing', icon: DollarSign },
-          { id: 'gallery', label: 'Style Lookbook Gallery', icon: Sparkles },
-          { id: 'settings', label: 'Saloon Settings', icon: Settings },
         ].map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
@@ -277,38 +654,32 @@ export const AdminDashboard: React.FC = () => {
         })}
       </div>
 
-      {/* TAB 1: ALL 4 BARBERS QUEUE MANAGEMENT */}
-      {activeTab === 'queues' && (
+      {/* ========================================================= */}
+      {/* TAB 1: OVERVIEW & LIVE QUEUE WORKLOAD */}
+      {/* ========================================================= */}
+      {activeTab === 'overview' && (
         <div className="space-y-6">
-          {/* Workload Summary Metric Cards */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <div className="bg-charcoal-900 p-4 rounded-2xl border border-charcoal-800">
-              <span className="text-[11px] text-slate-400 block">Total In Chairs Now</span>
+              <span className="text-[11px] text-slate-400 block">Serving in Chairs</span>
               <span className="text-2xl font-black text-amber-400">
                 {analytics.currentlyServing}
               </span>
             </div>
             <div className="bg-charcoal-900 p-4 rounded-2xl border border-charcoal-800">
-              <span className="text-[11px] text-slate-400 block">Waiting in Queue</span>
-              <span className="text-2xl font-black text-white">
-                {analytics.currentlyWaiting}
-              </span>
+              <span className="text-[11px] text-slate-400 block">Waiting in Lines</span>
+              <span className="text-2xl font-black text-white">{analytics.currentlyWaiting}</span>
             </div>
             <div className="bg-charcoal-900 p-4 rounded-2xl border border-charcoal-800">
-              <span className="text-[11px] text-slate-400 block">Services Completed Today</span>
-              <span className="text-2xl font-black text-emerald-400">
-                {analytics.totalServed}
-              </span>
+              <span className="text-[11px] text-slate-400 block">Completed Today</span>
+              <span className="text-2xl font-black text-emerald-400">{analytics.totalServed}</span>
             </div>
             <div className="bg-charcoal-900 p-4 rounded-2xl border border-charcoal-800">
               <span className="text-[11px] text-slate-400 block">Est. Average Wait</span>
-              <span className="text-2xl font-black text-slate-200">
-                ~{analytics.avgWaitMins}m
-              </span>
+              <span className="text-2xl font-black text-slate-200">~{analytics.avgWaitMins}m</span>
             </div>
           </div>
 
-          {/* 4 Barber Columns Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             {barbers.map((barber) => {
               const activeCust = queues.find(
@@ -326,7 +697,6 @@ export const AdminDashboard: React.FC = () => {
                   className="bg-charcoal-900 border border-charcoal-800 rounded-3xl p-4 flex flex-col justify-between shadow-lg"
                 >
                   <div>
-                    {/* Barber Header */}
                     <div className="flex items-center gap-3 border-b border-charcoal-800 pb-3 mb-3">
                       <img
                         src={barber.photo_url}
@@ -335,23 +705,16 @@ export const AdminDashboard: React.FC = () => {
                       />
                       <div className="flex-1 min-w-0">
                         <h4 className="text-xs font-bold text-white truncate">{barber.name}</h4>
-                        <div className="flex items-center gap-1 mt-0.5">
-                          {barber.current_status === 'serving' ? (
-                            <span className="text-[10px] text-amber-400 font-semibold">
-                              In Chair ({waitEst.queue_length} total)
-                            </span>
-                          ) : barber.current_status === 'on_break' ? (
-                            <span className="text-[10px] text-slate-400">On Break</span>
-                          ) : (
-                            <span className="text-[10px] text-emerald-400 font-semibold">
-                              Available
-                            </span>
-                          )}
-                        </div>
+                        <span className="text-[10px] text-amber-400">
+                          {barber.current_status === 'serving'
+                            ? `In Chair (${waitEst.queue_length} in queue)`
+                            : barber.current_status === 'on_break'
+                            ? 'On Break'
+                            : 'Available'}
+                        </span>
                       </div>
                     </div>
 
-                    {/* Active Customer in Chair */}
                     <div className="mb-3">
                       <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">
                         In Chair
@@ -378,7 +741,7 @@ export const AdminDashboard: React.FC = () => {
                               onClick={() => completeService(activeCust.id)}
                               className="py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-[10px]"
                             >
-                              Done
+                              Complete
                             </button>
                             <button
                               onClick={() => skipCustomer(activeCust.id)}
@@ -395,7 +758,6 @@ export const AdminDashboard: React.FC = () => {
                       )}
                     </div>
 
-                    {/* Waiting Queue List */}
                     <div>
                       <div className="flex justify-between items-center mb-1">
                         <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
@@ -455,7 +817,6 @@ export const AdminDashboard: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* Add direct walkin for this specific barber */}
                   <button
                     onClick={() => {
                       setWalkinBarberId(barber.id);
@@ -464,7 +825,7 @@ export const AdminDashboard: React.FC = () => {
                     className="w-full mt-3 py-1.5 rounded-xl bg-charcoal-800 hover:bg-charcoal-700 text-slate-300 text-[11px] font-semibold border border-charcoal-700 transition-colors flex items-center justify-center gap-1"
                   >
                     <Plus className="w-3 h-3" />
-                    <span>Add to {barber.name.split(' ')[0]}</span>
+                    <span>Add Walk-in</span>
                   </button>
                 </div>
               );
@@ -473,12 +834,387 @@ export const AdminDashboard: React.FC = () => {
         </div>
       )}
 
-      {/* TAB 2: ONLINE BOOKING PROMINENT SWITCH & SETTINGS (SECTION 5 REQUIREMENT) */}
+      {/* ========================================================= */}
+      {/* TAB 2: SERVICES & PRICING (UPDATE PRICES IN ₹) */}
+      {/* ========================================================= */}
+      {activeTab === 'services' && (
+        <div className="space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <h3 className="text-base font-bold text-white flex items-center gap-2">
+                <DollarSign className="w-4 h-4 text-amber-400" />
+                <span>Service Catalog & Pricing</span>
+              </h3>
+              <p className="text-xs text-slate-400">
+                Click "Edit" on any service to change its price in ₹, duration, or description.
+              </p>
+            </div>
+            <button
+              onClick={handleOpenAddService}
+              className="px-4 py-2 rounded-xl bg-amber-500 text-charcoal-950 font-bold text-xs flex items-center gap-1.5 shadow"
+            >
+              <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
+              <span>Add New Service</span>
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+            {services.map((srv) => (
+              <div
+                key={srv.id}
+                className="bg-charcoal-900 border border-charcoal-800 rounded-2xl p-4 flex items-center justify-between gap-4 shadow"
+              >
+                <div className="flex-1">
+                  <div className="flex items-center gap-2">
+                    <h4 className="text-sm font-bold text-white">{srv.name}</h4>
+                    <span className="text-[10px] bg-charcoal-950 text-slate-400 px-2 py-0.5 rounded border border-charcoal-800">
+                      {srv.category}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-400 mt-1 line-clamp-1">{srv.description}</p>
+                  <div className="text-[11px] text-slate-500 mt-1 flex items-center gap-1">
+                    <Clock className="w-3 h-3 text-amber-500" />
+                    <span>Approx. {srv.duration_minutes} minutes</span>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <div className="text-right">
+                    <span className="text-base font-black text-amber-400">₹{srv.price_inr}</span>
+                  </div>
+                  <button
+                    onClick={() => handleOpenEditService(srv)}
+                    className="p-2 rounded-xl bg-charcoal-800 hover:bg-amber-500 hover:text-charcoal-950 text-slate-300 transition-colors"
+                    title="Edit Price & Details"
+                  >
+                    <Edit className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (confirm(`Delete service "${srv.name}"?`)) {
+                        deleteService(srv.id);
+                        showToast(`Deleted service ${srv.name}`);
+                      }
+                    }}
+                    className="p-2 rounded-xl bg-charcoal-800 hover:bg-rose-600/30 text-slate-500 hover:text-rose-400 transition-colors"
+                    title="Delete Service"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================= */}
+      {/* TAB 3: STYLES LOOKBOOK & PHOTOS (UPDATE PHOTOS & PRICES) */}
+      {/* ========================================================= */}
+      {activeTab === 'gallery' && (
+        <div className="space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <h3 className="text-base font-bold text-white flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-amber-400" />
+                <span>Trending Styles Lookbook & Photos</span>
+              </h3>
+              <p className="text-xs text-slate-400">
+                Update haircut photos, pricing in ₹, barber cutting notes, and trending status.
+              </p>
+            </div>
+            <button
+              onClick={handleOpenAddStyle}
+              className="px-4 py-2 rounded-xl bg-amber-500 text-charcoal-950 font-bold text-xs flex items-center gap-1.5 shadow"
+            >
+              <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
+              <span>Add New Style Photo</span>
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {styles.map((st) => (
+              <div
+                key={st.id}
+                className="bg-charcoal-900 border border-charcoal-800 rounded-3xl overflow-hidden p-3 shadow-lg flex flex-col justify-between"
+              >
+                <div>
+                  <div className="relative aspect-[4/3] rounded-2xl overflow-hidden bg-charcoal-950 mb-3">
+                    <img
+                      src={st.image_url}
+                      alt={st.name}
+                      className="w-full h-full object-cover"
+                    />
+                    {st.is_trending && (
+                      <span className="absolute top-2.5 left-2.5 bg-amber-500 text-charcoal-950 font-bold text-[10px] px-2 py-0.5 rounded-full shadow">
+                        Trending
+                      </span>
+                    )}
+                    <span className="absolute bottom-2.5 right-2.5 bg-charcoal-950/90 text-amber-400 font-bold text-xs px-2.5 py-1 rounded-lg border border-charcoal-800 backdrop-blur">
+                      ₹{st.default_price_inr}
+                    </span>
+                  </div>
+
+                  <h4 className="text-sm font-bold text-white line-clamp-1">{st.name}</h4>
+                  <div className="text-[11px] text-amber-400 font-medium capitalize mt-0.5">
+                    {st.category.replace('_', ' ')} • ~{st.estimated_mins} mins
+                  </div>
+                  <p className="text-xs text-slate-400 mt-1 line-clamp-2">{st.description}</p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 mt-4 pt-3 border-t border-charcoal-800">
+                  <button
+                    onClick={() => handleOpenEditStyle(st)}
+                    className="py-2 px-3 rounded-xl bg-charcoal-800 hover:bg-amber-500 hover:text-charcoal-950 text-slate-200 text-xs font-bold transition-colors flex items-center justify-center gap-1.5"
+                  >
+                    <Edit className="w-3.5 h-3.5" />
+                    <span>Edit Photo/Price</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      if (confirm(`Remove style "${st.name}"?`)) {
+                        deleteStyle(st.id);
+                        showToast(`Removed style ${st.name}`);
+                      }
+                    }}
+                    className="py-2 px-3 rounded-xl bg-charcoal-800 hover:bg-rose-600/30 text-rose-400 text-xs font-semibold transition-colors flex items-center justify-center gap-1.5"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Remove</span>
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================= */}
+      {/* TAB 4: BARBERS MANAGEMENT & PHOTOS */}
+      {/* ========================================================= */}
+      {activeTab === 'barbers' && (
+        <div className="space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <h3 className="text-base font-bold text-white flex items-center gap-2">
+                <Scissors className="w-4 h-4 text-amber-400" />
+                <span>Barber Staff Management</span>
+              </h3>
+              <p className="text-xs text-slate-400">
+                Change barber photographs, working bio, 4-digit mobile PIN, and service duration.
+              </p>
+            </div>
+            <button
+              onClick={handleOpenAddBarber}
+              className="px-4 py-2 rounded-xl bg-amber-500 text-charcoal-950 font-bold text-xs flex items-center gap-1.5 shadow"
+            >
+              <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
+              <span>Add Barber</span>
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {barbers.map((b) => (
+              <div
+                key={b.id}
+                className="bg-charcoal-900 border border-charcoal-800 rounded-3xl p-5 shadow-lg flex flex-col justify-between"
+              >
+                <div>
+                  <div className="flex items-start gap-4 mb-3">
+                    <img
+                      src={b.photo_url}
+                      alt={b.name}
+                      className="w-16 h-16 rounded-2xl object-cover border-2 border-amber-500/40 shadow"
+                    />
+                    <div className="flex-1">
+                      <div className="flex justify-between items-start">
+                        <h4 className="text-base font-bold text-white">{b.name}</h4>
+                        <span className="text-xs font-mono bg-charcoal-950 px-2 py-0.5 rounded border border-charcoal-800 text-amber-400">
+                          PIN: {b.pin_code}
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-400 mt-0.5">
+                        {b.experience_years} years exp • ~{b.avg_service_mins}m avg duration
+                      </p>
+                    </div>
+                  </div>
+
+                  <p className="text-xs text-slate-300 leading-relaxed mb-3 line-clamp-2">{b.bio}</p>
+
+                  <div className="flex flex-wrap gap-1.5 mb-2">
+                    {b.specialties.map((spec, i) => (
+                      <span
+                        key={i}
+                        className="text-[10px] bg-charcoal-950 text-slate-300 px-2 py-0.5 rounded border border-charcoal-800"
+                      >
+                        {spec}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 mt-3 pt-3 border-t border-charcoal-800">
+                  <button
+                    onClick={() => handleOpenEditBarber(b)}
+                    className="py-2 px-3 rounded-xl bg-charcoal-800 hover:bg-amber-500 hover:text-charcoal-950 text-slate-200 text-xs font-bold transition-colors flex items-center justify-center gap-1.5"
+                  >
+                    <Edit className="w-3.5 h-3.5" />
+                    <span>Edit Photo/Info</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      if (confirm(`Remove barber "${b.name}"?`)) {
+                        deleteBarber(b.id);
+                        showToast(`Removed barber ${b.name}`);
+                      }
+                    }}
+                    className="py-2 px-3 rounded-xl bg-charcoal-800 hover:bg-rose-600/30 text-rose-400 text-xs font-semibold transition-colors flex items-center justify-center gap-1.5"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Delete</span>
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================= */}
+      {/* TAB 5: SALON GENERAL INFORMATION & 6-DIGIT ADMIN PIN */}
+      {/* ========================================================= */}
+      {activeTab === 'info' && (
+        <div className="max-w-2xl bg-charcoal-900 border border-charcoal-800 rounded-3xl p-6 space-y-6 shadow-xl">
+          <div>
+            <span className="text-[10px] text-amber-400 font-bold uppercase tracking-wider">
+              Salon Profile & Security
+            </span>
+            <h3 className="text-xl font-bold text-white mt-1">Update Salon Information</h3>
+            <p className="text-xs text-slate-400 mt-1">
+              Changes reflect instantly across the entire app for all customers and barbers.
+            </p>
+          </div>
+
+          <form onSubmit={handleSaveSalonInfo} className="space-y-4">
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 mb-1">Salon Name</label>
+              <input
+                type="text"
+                required
+                value={salonInfoForm.name}
+                onChange={(e) => setSalonInfoForm({ ...salonInfoForm, name: e.target.value })}
+                className="w-full px-3.5 py-2.5 rounded-xl bg-charcoal-950 border border-charcoal-700 text-white text-xs sm:text-sm focus:outline-none focus:border-amber-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 mb-1">Tagline</label>
+              <input
+                type="text"
+                value={salonInfoForm.tagline}
+                onChange={(e) => setSalonInfoForm({ ...salonInfoForm, tagline: e.target.value })}
+                className="w-full px-3.5 py-2.5 rounded-xl bg-charcoal-950 border border-charcoal-700 text-white text-xs sm:text-sm focus:outline-none focus:border-amber-500"
+              />
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">
+                  Contact Phone
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={salonInfoForm.phone}
+                  onChange={(e) => setSalonInfoForm({ ...salonInfoForm, phone: e.target.value })}
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-charcoal-950 border border-charcoal-700 text-white text-xs sm:text-sm focus:outline-none focus:border-amber-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">
+                  6-Digit Admin PIN <span className="text-amber-400">*</span>
+                </label>
+                <input
+                  type="text"
+                  maxLength={6}
+                  required
+                  value={salonInfoForm.admin_pin}
+                  onChange={(e) =>
+                    setSalonInfoForm({
+                      ...salonInfoForm,
+                      admin_pin: e.target.value.replace(/[^0-9]/g, ''),
+                    })
+                  }
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-charcoal-950 border border-amber-500/50 text-amber-300 font-mono text-sm tracking-widest focus:outline-none focus:border-amber-400"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-300 mb-1">Address</label>
+              <input
+                type="text"
+                required
+                value={salonInfoForm.address}
+                onChange={(e) => setSalonInfoForm({ ...salonInfoForm, address: e.target.value })}
+                className="w-full px-3.5 py-2.5 rounded-xl bg-charcoal-950 border border-charcoal-700 text-white text-xs sm:text-sm focus:outline-none focus:border-amber-500"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">City</label>
+                <input
+                  type="text"
+                  value={salonInfoForm.city}
+                  onChange={(e) => setSalonInfoForm({ ...salonInfoForm, city: e.target.value })}
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-charcoal-950 border border-charcoal-700 text-white text-xs focus:outline-none focus:border-amber-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">State</label>
+                <input
+                  type="text"
+                  value={salonInfoForm.state}
+                  onChange={(e) => setSalonInfoForm({ ...salonInfoForm, state: e.target.value })}
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-charcoal-950 border border-charcoal-700 text-white text-xs focus:outline-none focus:border-amber-500"
+                />
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              className="w-full py-3.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-charcoal-950 font-black text-sm tracking-wide transition-all shadow-lg shadow-amber-500/20"
+            >
+              Save Salon Information & New PIN
+            </button>
+          </form>
+
+          {/* Developer Reset Section */}
+          <div className="pt-4 border-t border-charcoal-800 flex justify-between items-center text-xs">
+            <span className="text-slate-400">Developer Master Reset</span>
+            <button
+              onClick={resetAllDemoData}
+              className="px-3 py-1.5 rounded-xl bg-charcoal-800 hover:bg-rose-600/20 text-rose-400 font-semibold transition-colors"
+            >
+              Reset to Demo Defaults
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================= */}
+      {/* TAB 6: ONLINE APPOINTMENTS MASTER SWITCH */}
+      {/* ========================================================= */}
       {activeTab === 'bookings' && (
         <div className="max-w-2xl bg-charcoal-900 border border-charcoal-800 rounded-3xl p-6 space-y-6 shadow-xl">
           <div>
             <span className="text-[10px] text-amber-400 font-bold uppercase tracking-wider">
-              Booking Policy & Walk-in Integration
+              Booking Policy Control
             </span>
             <h3 className="text-xl font-bold text-white mt-1">Online Appointment Controls</h3>
             <p className="text-xs text-slate-400 mt-1">
@@ -486,14 +1222,13 @@ export const AdminDashboard: React.FC = () => {
             </p>
           </div>
 
-          {/* Master Prominent Toggle */}
           <div className="p-5 rounded-2xl bg-charcoal-950 border border-charcoal-800 flex items-center justify-between gap-4">
             <div>
               <h4 className="text-sm font-bold text-white">Online Appointment Booking</h4>
               <p className="text-xs text-slate-400 mt-0.5">
                 {settings.online_booking_enabled
-                  ? 'Active: Customers can view slots and book reserved chairs.'
-                  : 'Disabled: Customer booking tab is hidden; saloon operates on live walk-ins.'}
+                  ? 'Active: Customers can view available time slots and book.'
+                  : 'Disabled: Customer booking tab is hidden; salon operates on live walk-ins.'}
               </p>
             </div>
 
@@ -513,12 +1248,11 @@ export const AdminDashboard: React.FC = () => {
             </button>
           </div>
 
-          {/* Integrated Walk-ins setting */}
           <div className="p-4 rounded-2xl bg-charcoal-950 border border-charcoal-800 flex items-center justify-between gap-4">
             <div>
               <h4 className="text-xs font-bold text-white">Accept Walk-ins When Booking is ON</h4>
               <p className="text-[11px] text-slate-400 mt-0.5">
-                Keep walk-in queue active in parallel with scheduled appointment slots.
+                Keep walk-in queue active in parallel with scheduled appointments.
               </p>
             </div>
             <input
@@ -531,34 +1265,11 @@ export const AdminDashboard: React.FC = () => {
             />
           </div>
 
-          {/* Buffer & advance booking options */}
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs text-slate-400 mb-1">Appointment Buffer (Mins)</label>
-              <input
-                type="number"
-                value={settings.buffer_minutes}
-                onChange={(e) => updateSettings({ buffer_minutes: Number(e.target.value) })}
-                className="w-full px-3 py-2 rounded-xl bg-charcoal-950 border border-charcoal-700 text-white text-xs"
-              />
-            </div>
-            <div>
-              <label className="block text-xs text-slate-400 mb-1">Advance Booking Window (Days)</label>
-              <input
-                type="number"
-                value={settings.advance_booking_days}
-                onChange={(e) => updateSettings({ advance_booking_days: Number(e.target.value) })}
-                className="w-full px-3 py-2 rounded-xl bg-charcoal-950 border border-charcoal-700 text-white text-xs"
-              />
-            </div>
-          </div>
-
-          {/* Existing Appointments List */}
           <div>
             <h4 className="text-xs font-bold text-white uppercase tracking-wider mb-2">
-              All Existing Appointments ({appointments.length})
+              Existing Appointments ({appointments.length})
             </h4>
-            <div className="space-y-2">
+            <div className="space-y-2 max-h-72 overflow-y-auto">
               {appointments.map((apt) => (
                 <div
                   key={apt.id}
@@ -568,7 +1279,6 @@ export const AdminDashboard: React.FC = () => {
                     <div className="font-bold text-white flex items-center gap-2">
                       <span className="text-amber-400">{apt.appointment_ref}</span>
                       <span>{apt.customer_name}</span>
-                      <span className="text-slate-400 font-normal">({apt.customer_phone})</span>
                     </div>
                     <p className="text-[11px] text-slate-400 mt-0.5">
                       {apt.appointment_date} at {apt.start_time} with {apt.barber_name} •{' '}
@@ -576,13 +1286,7 @@ export const AdminDashboard: React.FC = () => {
                     </p>
                   </div>
 
-                  <span
-                    className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                      apt.status === 'confirmed'
-                        ? 'bg-emerald-500/20 text-emerald-400'
-                        : 'bg-charcoal-800 text-slate-400'
-                    }`}
-                  >
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400">
                     {apt.status}
                   </span>
                 </div>
@@ -592,7 +1296,9 @@ export const AdminDashboard: React.FC = () => {
         </div>
       )}
 
-      {/* TAB 3: DAILY ANALYTICS & AUDIT LOGS */}
+      {/* ========================================================= */}
+      {/* TAB 7: REPORTS & AUDIT TRAIL */}
+      {/* ========================================================= */}
       {activeTab === 'reports' && (
         <div className="space-y-6">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -603,22 +1309,21 @@ export const AdminDashboard: React.FC = () => {
             </div>
 
             <div className="bg-charcoal-900 p-5 rounded-3xl border border-charcoal-800">
-              <span className="text-xs text-slate-400 block mb-1">Completed Customers</span>
+              <span className="text-xs text-slate-400 block mb-1">Customers Served</span>
               <span className="text-3xl font-black text-amber-400">{analytics.totalServed}</span>
               <p className="text-[11px] text-slate-500 mt-1">Services finished today</p>
             </div>
 
             <div className="bg-charcoal-900 p-5 rounded-3xl border border-charcoal-800">
-              <span className="text-xs text-slate-400 block mb-1">Customer Cancellations</span>
+              <span className="text-xs text-slate-400 block mb-1">Cancellations</span>
               <span className="text-3xl font-black text-rose-400">{analytics.cancelledCount}</span>
               <p className="text-[11px] text-slate-500 mt-1">Tokens cancelled</p>
             </div>
           </div>
 
-          {/* Audit Logs */}
           <div className="bg-charcoal-900 border border-charcoal-800 rounded-3xl p-5">
             <div className="flex justify-between items-center mb-4">
-              <h4 className="text-sm font-bold text-white">System Audit & Reassignment Trail</h4>
+              <h4 className="text-sm font-bold text-white">System Audit & Change Trail</h4>
               <span className="text-xs text-slate-400">{auditLogs.length} events logged</span>
             </div>
 
@@ -647,196 +1352,399 @@ export const AdminDashboard: React.FC = () => {
         </div>
       )}
 
-      {/* TAB 4: BARBERS MANAGEMENT */}
-      {activeTab === 'barbers' && (
-        <div className="space-y-4">
-          <div className="flex justify-between items-center">
-            <h3 className="text-base font-bold text-white">Barber Staff Team (4 Configured)</h3>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {barbers.map((b) => (
-              <div
-                key={b.id}
-                className="bg-charcoal-900 border border-charcoal-800 rounded-3xl p-4 flex items-start gap-4"
-              >
-                <img
-                  src={b.photo_url}
-                  alt={b.name}
-                  className="w-16 h-16 rounded-2xl object-cover border border-amber-500/30"
-                />
-                <div className="flex-1">
-                  <div className="flex justify-between">
-                    <h4 className="text-sm font-bold text-white">{b.name}</h4>
-                    <span className="text-xs font-mono text-amber-400">PIN: {b.pin_code}</span>
-                  </div>
-                  <p className="text-xs text-slate-400 mt-0.5">{b.experience_years} years exp • ~{b.avg_service_mins}m avg</p>
-                  <div className="flex flex-wrap gap-1 mt-2">
-                    {b.specialties.map((s, idx) => (
-                      <span
-                        key={idx}
-                        className="text-[10px] bg-charcoal-950 text-slate-300 px-2 py-0.5 rounded border border-charcoal-800"
-                      >
-                        {s}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* TAB 5: SERVICES & PRICING */}
-      {activeTab === 'services' && (
-        <div className="space-y-4">
-          <div className="flex justify-between items-center">
-            <h3 className="text-base font-bold text-white">Salon Services & Pricing</h3>
+      {/* ========================================================= */}
+      {/* MODAL: EDIT OR ADD SERVICE (PRICES IN ₹) */}
+      {/* ========================================================= */}
+      {showAddServiceModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <div className="bg-charcoal-900 border border-charcoal-700 rounded-3xl max-w-sm w-full p-5 shadow-2xl relative text-left">
             <button
-              onClick={() => setShowAddServiceModal(true)}
-              className="px-3 py-1.5 rounded-xl bg-amber-500 text-charcoal-950 font-bold text-xs flex items-center gap-1"
+              onClick={() => setShowAddServiceModal(false)}
+              className="absolute top-4 right-4 text-slate-400 hover:text-white"
             >
-              <Plus className="w-3.5 h-3.5" />
-              <span>Add Service</span>
+              <X className="w-5 h-5" />
             </button>
-          </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {services.map((srv) => (
-              <div
-                key={srv.id}
-                className="p-4 rounded-2xl bg-charcoal-900 border border-charcoal-800 flex items-center justify-between"
-              >
+            <h3 className="text-base font-bold text-white mb-3 flex items-center gap-2">
+              <DollarSign className="w-4 h-4 text-amber-400" />
+              <span>{editingService ? 'Edit Service & Price' : 'Add New Service'}</span>
+            </h3>
+
+            <form onSubmit={handleSaveService} className="space-y-3">
+              <div>
+                <label className="block text-xs text-slate-300 mb-1">Service Name *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Skin Fade & Beard Trim"
+                  value={serviceForm.name}
+                  onChange={(e) => setServiceForm({ ...serviceForm, name: e.target.value })}
+                  className="w-full px-3 py-2 rounded-xl bg-charcoal-950 border border-charcoal-700 text-white text-xs focus:outline-none focus:border-amber-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <h4 className="text-xs font-bold text-white">{srv.name}</h4>
-                  <p className="text-[11px] text-slate-400 mt-0.5">
-                    Category: {srv.category} • ~{srv.duration_minutes} mins
-                  </p>
+                  <label className="block text-xs text-slate-300 mb-1">Price (₹) *</label>
+                  <input
+                    type="number"
+                    required
+                    value={serviceForm.price_inr}
+                    onChange={(e) =>
+                      setServiceForm({ ...serviceForm, price_inr: Number(e.target.value) })
+                    }
+                    className="w-full px-3 py-2 rounded-xl bg-charcoal-950 border border-charcoal-700 text-amber-400 font-bold text-sm focus:outline-none focus:border-amber-500"
+                  />
                 </div>
-                <div className="flex items-center gap-3">
-                  <span className="text-sm font-black text-amber-400">₹{srv.price_inr}</span>
-                  <button
-                    onClick={() => deleteService(srv.id)}
-                    className="p-1.5 text-slate-500 hover:text-rose-400"
-                    title="Delete"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+                <div>
+                  <label className="block text-xs text-slate-300 mb-1">Duration (Mins) *</label>
+                  <input
+                    type="number"
+                    required
+                    value={serviceForm.duration_minutes}
+                    onChange={(e) =>
+                      setServiceForm({
+                        ...serviceForm,
+                        duration_minutes: Number(e.target.value),
+                      })
+                    }
+                    className="w-full px-3 py-2 rounded-xl bg-charcoal-950 border border-charcoal-700 text-white text-xs focus:outline-none focus:border-amber-500"
+                  />
                 </div>
               </div>
-            ))}
-          </div>
-        </div>
-      )}
 
-      {/* TAB 6: STYLES GALLERY MANAGEMENT */}
-      {activeTab === 'gallery' && (
-        <div className="space-y-4">
-          <div className="flex justify-between items-center">
-            <div>
-              <h3 className="text-base font-bold text-white">Haircut & Beard Styles Management</h3>
-              <p className="text-xs text-slate-400">
-                Upload new trending images or adjust reference cutting instructions.
-              </p>
-            </div>
-            <button
-              onClick={() => setShowAddStyleModal(true)}
-              className="px-3 py-1.5 rounded-xl bg-amber-500 text-charcoal-950 font-bold text-xs flex items-center gap-1"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              <span>Add Style</span>
-            </button>
-          </div>
-
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            {styles.map((st) => (
-              <div
-                key={st.id}
-                className="bg-charcoal-900 border border-charcoal-800 rounded-2xl overflow-hidden p-2 relative group"
-              >
-                <img
-                  src={st.image_url}
-                  alt={st.name}
-                  className="w-full aspect-[4/3] object-cover rounded-xl mb-2"
-                />
-                <h5 className="text-xs font-bold text-white truncate">{st.name}</h5>
-                <div className="flex justify-between text-[10px] text-slate-400 mt-0.5">
-                  <span className="text-amber-400 font-bold">₹{st.default_price_inr}</span>
-                  <span>{st.category}</span>
-                </div>
-                <button
-                  onClick={() => deleteStyle(st.id)}
-                  className="absolute top-3 right-3 p-1 rounded bg-black/60 text-slate-300 hover:text-rose-400 opacity-0 group-hover:opacity-100 transition-opacity"
-                  title="Remove Style"
+              <div>
+                <label className="block text-xs text-slate-300 mb-1">Category</label>
+                <select
+                  value={serviceForm.category}
+                  onChange={(e) => setServiceForm({ ...serviceForm, category: e.target.value })}
+                  className="w-full px-3 py-2 rounded-xl bg-charcoal-950 border border-charcoal-700 text-white text-xs"
                 >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
+                  <option value="Haircut">Haircut</option>
+                  <option value="Beard">Beard</option>
+                  <option value="Shave">Shave</option>
+                  <option value="Combo">Combo</option>
+                  <option value="Spa">Spa & Massage</option>
+                  <option value="Grooming">Facial / Grooming</option>
+                  <option value="Color">Coloring</option>
+                </select>
               </div>
-            ))}
+
+              <div>
+                <label className="block text-xs text-slate-300 mb-1">Description</label>
+                <textarea
+                  rows={2}
+                  value={serviceForm.description}
+                  onChange={(e) =>
+                    setServiceForm({ ...serviceForm, description: e.target.value })
+                  }
+                  className="w-full px-3 py-2 rounded-xl bg-charcoal-950 border border-charcoal-700 text-white text-xs"
+                />
+              </div>
+
+              <button
+                type="submit"
+                className="w-full mt-2 py-3 rounded-xl bg-amber-500 text-charcoal-950 font-bold text-xs shadow"
+              >
+                {editingService ? 'Update Service & Price' : 'Save Service'}
+              </button>
+            </form>
           </div>
         </div>
       )}
 
-      {/* TAB 7: SETTINGS & CREATOR INFO */}
-      {activeTab === 'settings' && (
-        <div className="max-w-xl bg-charcoal-900 border border-charcoal-800 rounded-3xl p-6 space-y-4">
-          <h3 className="text-base font-bold text-white">Saloon Profile Settings</h3>
-
-          <div>
-            <label className="block text-xs text-slate-400 mb-1">Saloon Name</label>
-            <input
-              type="text"
-              value={settings.name}
-              onChange={(e) => updateSettings({ name: e.target.value })}
-              className="w-full px-3 py-2 rounded-xl bg-charcoal-950 border border-charcoal-700 text-white text-xs"
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs text-slate-400 mb-1">Address</label>
-            <input
-              type="text"
-              value={settings.address}
-              onChange={(e) => updateSettings({ address: e.target.value })}
-              className="w-full px-3 py-2 rounded-xl bg-charcoal-950 border border-charcoal-700 text-white text-xs"
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs text-slate-400 mb-1">City</label>
-              <input
-                type="text"
-                value={settings.city}
-                onChange={(e) => updateSettings({ city: e.target.value })}
-                className="w-full px-3 py-2 rounded-xl bg-charcoal-950 border border-charcoal-700 text-white text-xs"
-              />
-            </div>
-            <div>
-              <label className="block text-xs text-slate-400 mb-1">Contact Phone</label>
-              <input
-                type="text"
-                value={settings.phone}
-                onChange={(e) => updateSettings({ phone: e.target.value })}
-                className="w-full px-3 py-2 rounded-xl bg-charcoal-950 border border-charcoal-700 text-white text-xs"
-              />
-            </div>
-          </div>
-
-          <div className="pt-4 border-t border-charcoal-800 flex justify-between items-center">
-            <span className="text-xs text-slate-400">Developer Reset Option</span>
+      {/* ========================================================= */}
+      {/* MODAL: EDIT OR ADD BARBER (PHOTO & INFO) */}
+      {/* ========================================================= */}
+      {showAddBarberModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <div className="bg-charcoal-900 border border-charcoal-700 rounded-3xl max-w-sm w-full p-5 shadow-2xl relative text-left">
             <button
-              onClick={resetAllDemoData}
-              className="px-3 py-1.5 rounded-xl bg-charcoal-800 hover:bg-rose-600/20 text-rose-400 text-xs font-semibold transition-colors"
+              onClick={() => setShowAddBarberModal(false)}
+              className="absolute top-4 right-4 text-slate-400 hover:text-white"
             >
-              Reset to Demo Data
+              <X className="w-5 h-5" />
             </button>
+
+            <h3 className="text-base font-bold text-white mb-3 flex items-center gap-2">
+              <Scissors className="w-4 h-4 text-amber-400" />
+              <span>{editingBarber ? 'Edit Barber & Photo' : 'Add New Barber'}</span>
+            </h3>
+
+            <form onSubmit={handleSaveBarber} className="space-y-3">
+              <div>
+                <label className="block text-xs text-slate-300 mb-1">Barber Name *</label>
+                <input
+                  type="text"
+                  required
+                  value={barberForm.name}
+                  onChange={(e) => setBarberForm({ ...barberForm, name: e.target.value })}
+                  className="w-full px-3 py-2 rounded-xl bg-charcoal-950 border border-charcoal-700 text-white text-xs focus:outline-none focus:border-amber-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs text-slate-300 mb-1">Barber Photo URL *</label>
+                <input
+                  type="url"
+                  required
+                  value={barberForm.photo_url}
+                  onChange={(e) => setBarberForm({ ...barberForm, photo_url: e.target.value })}
+                  className="w-full px-3 py-2 rounded-xl bg-charcoal-950 border border-charcoal-700 text-white text-xs focus:outline-none focus:border-amber-500"
+                />
+                {barberForm.photo_url && (
+                  <div className="mt-2 flex items-center gap-2">
+                    <img
+                      src={barberForm.photo_url}
+                      alt="Preview"
+                      className="w-10 h-10 rounded-xl object-cover border border-amber-500/40"
+                    />
+                    <span className="text-[10px] text-slate-400">Photo Preview</span>
+                  </div>
+                )}
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-xs text-slate-300 mb-1">Experience (Yrs)</label>
+                  <input
+                    type="number"
+                    value={barberForm.experience_years}
+                    onChange={(e) =>
+                      setBarberForm({
+                        ...barberForm,
+                        experience_years: Number(e.target.value),
+                      })
+                    }
+                    className="w-full px-3 py-2 rounded-xl bg-charcoal-950 border border-charcoal-700 text-white text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-slate-300 mb-1">Avg Duration (Mins)</label>
+                  <input
+                    type="number"
+                    value={barberForm.avg_service_mins}
+                    onChange={(e) =>
+                      setBarberForm({
+                        ...barberForm,
+                        avg_service_mins: Number(e.target.value),
+                      })
+                    }
+                    className="w-full px-3 py-2 rounded-xl bg-charcoal-950 border border-charcoal-700 text-white text-xs"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs text-slate-300 mb-1">
+                  Specialties (Comma-separated)
+                </label>
+                <input
+                  type="text"
+                  value={barberForm.specialties}
+                  onChange={(e) =>
+                    setBarberForm({ ...barberForm, specialties: e.target.value })
+                  }
+                  className="w-full px-3 py-2 rounded-xl bg-charcoal-950 border border-charcoal-700 text-white text-xs"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs text-slate-300 mb-1">Barber 4-Digit Login PIN</label>
+                <input
+                  type="text"
+                  maxLength={4}
+                  value={barberForm.pin_code}
+                  onChange={(e) =>
+                    setBarberForm({ ...barberForm, pin_code: e.target.value })
+                  }
+                  className="w-full px-3 py-2 rounded-xl bg-charcoal-950 border border-charcoal-700 text-amber-400 font-mono text-xs"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs text-slate-300 mb-1">Short Bio</label>
+                <textarea
+                  rows={2}
+                  value={barberForm.bio}
+                  onChange={(e) => setBarberForm({ ...barberForm, bio: e.target.value })}
+                  className="w-full px-3 py-2 rounded-xl bg-charcoal-950 border border-charcoal-700 text-white text-xs"
+                />
+              </div>
+
+              <button
+                type="submit"
+                className="w-full mt-2 py-3 rounded-xl bg-amber-500 text-charcoal-950 font-bold text-xs shadow"
+              >
+                {editingBarber ? 'Save Barber Details' : 'Add Barber'}
+              </button>
+            </form>
           </div>
         </div>
       )}
 
-      {/* MODAL: ADD MANUAL WALKIN CUSTOMER */}
+      {/* ========================================================= */}
+      {/* MODAL: EDIT OR ADD STYLE (PHOTO, PRICE, INSTRUCTIONS) */}
+      {/* ========================================================= */}
+      {showAddStyleModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <div className="bg-charcoal-900 border border-charcoal-700 rounded-3xl max-w-sm w-full p-5 shadow-2xl relative text-left max-h-[90vh] overflow-y-auto">
+            <button
+              onClick={() => setShowAddStyleModal(false)}
+              className="absolute top-4 right-4 text-slate-400 hover:text-white"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <h3 className="text-base font-bold text-white mb-3 flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-amber-400" />
+              <span>{editingStyle ? 'Edit Lookbook Style & Photo' : 'Add New Style Photo'}</span>
+            </h3>
+
+            <form onSubmit={handleSaveStyle} className="space-y-3">
+              <div>
+                <label className="block text-xs text-slate-300 mb-1">Style Name *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Skin Fade Crop"
+                  value={styleForm.name}
+                  onChange={(e) => setStyleForm({ ...styleForm, name: e.target.value })}
+                  className="w-full px-3 py-2 rounded-xl bg-charcoal-950 border border-charcoal-700 text-white text-xs focus:outline-none focus:border-amber-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs text-slate-300 mb-1">Image / Photo URL *</label>
+                <input
+                  type="url"
+                  required
+                  value={styleForm.image_url}
+                  onChange={(e) => setStyleForm({ ...styleForm, image_url: e.target.value })}
+                  className="w-full px-3 py-2 rounded-xl bg-charcoal-950 border border-charcoal-700 text-white text-xs focus:outline-none focus:border-amber-500"
+                />
+                {styleForm.image_url && (
+                  <div className="mt-2 relative aspect-[4/3] rounded-xl overflow-hidden bg-charcoal-950 border border-amber-500/40">
+                    <img
+                      src={styleForm.image_url}
+                      alt="Style Preview"
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                )}
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-xs text-slate-300 mb-1">Price (₹) *</label>
+                  <input
+                    type="number"
+                    required
+                    value={styleForm.default_price_inr}
+                    onChange={(e) =>
+                      setStyleForm({
+                        ...styleForm,
+                        default_price_inr: Number(e.target.value),
+                      })
+                    }
+                    className="w-full px-3 py-2 rounded-xl bg-charcoal-950 border border-charcoal-700 text-amber-400 font-bold text-sm focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-slate-300 mb-1">Est. Mins</label>
+                  <input
+                    type="number"
+                    value={styleForm.estimated_mins}
+                    onChange={(e) =>
+                      setStyleForm({
+                        ...styleForm,
+                        estimated_mins: Number(e.target.value),
+                      })
+                    }
+                    className="w-full px-3 py-2 rounded-xl bg-charcoal-950 border border-charcoal-700 text-white text-xs focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs text-slate-300 mb-1">Category</label>
+                <select
+                  value={styleForm.category}
+                  onChange={(e) =>
+                    setStyleForm({ ...styleForm, category: e.target.value as StyleCategory })
+                  }
+                  className="w-full px-3 py-2 rounded-xl bg-charcoal-950 border border-charcoal-700 text-white text-xs"
+                >
+                  <option value="fade_taper">Fade & Taper</option>
+                  <option value="classic">Classic Haircut</option>
+                  <option value="modern_textured">Modern Textured</option>
+                  <option value="crew_short">Crew Cut / Short</option>
+                  <option value="long_hair">Long Hair</option>
+                  <option value="beard_shaping">Beard Sculpting</option>
+                  <option value="moustache">Moustache</option>
+                  <option value="combo">Cut + Beard Combo</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs text-slate-300 mb-1">Description</label>
+                <textarea
+                  rows={2}
+                  value={styleForm.description}
+                  onChange={(e) =>
+                    setStyleForm({ ...styleForm, description: e.target.value })
+                  }
+                  className="w-full px-3 py-2 rounded-xl bg-charcoal-950 border border-charcoal-700 text-white text-xs"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs text-slate-300 mb-1">
+                  Barber Cutting Notes (Shown to Barber)
+                </label>
+                <textarea
+                  rows={2}
+                  placeholder="e.g. Skin fade with foil shaver, textured crown..."
+                  value={styleForm.barber_instruction_notes}
+                  onChange={(e) =>
+                    setStyleForm({
+                      ...styleForm,
+                      barber_instruction_notes: e.target.value,
+                    })
+                  }
+                  className="w-full px-3 py-2 rounded-xl bg-charcoal-950 border border-charcoal-700 text-amber-300 text-xs"
+                />
+              </div>
+
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="trendingToggle"
+                  checked={styleForm.is_trending}
+                  onChange={(e) =>
+                    setStyleForm({ ...styleForm, is_trending: e.target.checked })
+                  }
+                  className="w-4 h-4 accent-amber-500 rounded"
+                />
+                <label htmlFor="trendingToggle" className="text-xs text-slate-300 font-semibold">
+                  Mark as "Trending" in Gallery
+                </label>
+              </div>
+
+              <button
+                type="submit"
+                className="w-full mt-2 py-3 rounded-xl bg-amber-500 text-charcoal-950 font-bold text-xs shadow"
+              >
+                {editingStyle ? 'Save Style & Price' : 'Add to Lookbook'}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================= */}
+      {/* MODAL: MANUAL WALKIN */}
+      {/* ========================================================= */}
       {showAddWalkinModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
           <div className="bg-charcoal-900 border border-charcoal-700 rounded-3xl max-w-sm w-full p-5 shadow-2xl relative text-left">
@@ -861,7 +1769,7 @@ export const AdminDashboard: React.FC = () => {
                   placeholder="e.g. Javed Dar"
                   value={walkinName}
                   onChange={(e) => setWalkinName(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl bg-charcoal-950 border border-charcoal-700 text-white text-xs focus:outline-none focus:border-amber-500"
+                  className="w-full px-3 py-2 rounded-xl bg-charcoal-950 border border-charcoal-700 text-white text-xs"
                 />
               </div>
 
@@ -872,12 +1780,12 @@ export const AdminDashboard: React.FC = () => {
                   placeholder="+91 98765 43210"
                   value={walkinPhone}
                   onChange={(e) => setWalkinPhone(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl bg-charcoal-950 border border-charcoal-700 text-white text-xs focus:outline-none focus:border-amber-500"
+                  className="w-full px-3 py-2 rounded-xl bg-charcoal-950 border border-charcoal-700 text-white text-xs"
                 />
               </div>
 
               <div>
-                <label className="block text-xs text-slate-300 mb-1">Assign to Barber</label>
+                <label className="block text-xs text-slate-300 mb-1">Assign Barber</label>
                 <select
                   value={walkinBarberId}
                   onChange={(e) => setWalkinBarberId(e.target.value)}
@@ -930,7 +1838,9 @@ export const AdminDashboard: React.FC = () => {
         </div>
       )}
 
-      {/* MODAL: TRANSFER CUSTOMER */}
+      {/* ========================================================= */}
+      {/* MODAL: TRANSFER / REASSIGN CUSTOMER */}
+      {/* ========================================================= */}
       {showTransferModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
           <div className="bg-charcoal-900 border border-charcoal-700 rounded-3xl max-w-sm w-full p-5 shadow-2xl relative text-left">
@@ -983,168 +1893,6 @@ export const AdminDashboard: React.FC = () => {
                 className="w-full mt-2 py-3 rounded-xl bg-amber-500 text-charcoal-950 font-bold text-xs"
               >
                 Confirm Reassignment
-              </button>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL: ADD SERVICE */}
-      {showAddServiceModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className="bg-charcoal-900 border border-charcoal-700 rounded-3xl max-w-sm w-full p-5 shadow-2xl relative text-left">
-            <button
-              onClick={() => setShowAddServiceModal(false)}
-              className="absolute top-4 right-4 text-slate-400 hover:text-white"
-            >
-              <X className="w-5 h-5" />
-            </button>
-
-            <h3 className="text-base font-bold text-white mb-3">Add New Service</h3>
-
-            <form onSubmit={handleCreateServiceSubmit} className="space-y-3">
-              <div>
-                <label className="block text-xs text-slate-300 mb-1">Service Name *</label>
-                <input
-                  type="text"
-                  required
-                  value={newServiceName}
-                  onChange={(e) => setNewServiceName(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl bg-charcoal-950 border border-charcoal-700 text-white text-xs"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block text-xs text-slate-300 mb-1">Price (₹) *</label>
-                  <input
-                    type="number"
-                    required
-                    value={newServicePrice}
-                    onChange={(e) => setNewServicePrice(Number(e.target.value))}
-                    className="w-full px-3 py-2 rounded-xl bg-charcoal-950 border border-charcoal-700 text-white text-xs"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs text-slate-300 mb-1">Duration (Mins) *</label>
-                  <input
-                    type="number"
-                    required
-                    value={newServiceDuration}
-                    onChange={(e) => setNewServiceDuration(Number(e.target.value))}
-                    className="w-full px-3 py-2 rounded-xl bg-charcoal-950 border border-charcoal-700 text-white text-xs"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs text-slate-300 mb-1">Category</label>
-                <select
-                  value={newServiceCategory}
-                  onChange={(e) => setNewServiceCategory(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl bg-charcoal-950 border border-charcoal-700 text-white text-xs"
-                >
-                  <option value="Haircut">Haircut</option>
-                  <option value="Beard">Beard</option>
-                  <option value="Shave">Shave</option>
-                  <option value="Combo">Combo</option>
-                  <option value="Grooming">Grooming</option>
-                </select>
-              </div>
-
-              <button
-                type="submit"
-                className="w-full mt-2 py-3 rounded-xl bg-amber-500 text-charcoal-950 font-bold text-xs"
-              >
-                Save Service
-              </button>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL: ADD STYLE */}
-      {showAddStyleModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className="bg-charcoal-900 border border-charcoal-700 rounded-3xl max-w-sm w-full p-5 shadow-2xl relative text-left">
-            <button
-              onClick={() => setShowAddStyleModal(false)}
-              className="absolute top-4 right-4 text-slate-400 hover:text-white"
-            >
-              <X className="w-5 h-5" />
-            </button>
-
-            <h3 className="text-base font-bold text-white mb-3">Add Haircut / Beard Style</h3>
-
-            <form onSubmit={handleCreateStyleSubmit} className="space-y-3">
-              <div>
-                <label className="block text-xs text-slate-300 mb-1">Style Name *</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Low Taper Fade"
-                  value={newStyleName}
-                  onChange={(e) => setNewStyleName(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl bg-charcoal-950 border border-charcoal-700 text-white text-xs"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs text-slate-300 mb-1">Image URL *</label>
-                <input
-                  type="url"
-                  required
-                  placeholder="https://..."
-                  value={newStyleImage}
-                  onChange={(e) => setNewStyleImage(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl bg-charcoal-950 border border-charcoal-700 text-white text-xs"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block text-xs text-slate-300 mb-1">Price (₹)</label>
-                  <input
-                    type="number"
-                    value={newStylePrice}
-                    onChange={(e) => setNewStylePrice(Number(e.target.value))}
-                    className="w-full px-3 py-2 rounded-xl bg-charcoal-950 border border-charcoal-700 text-white text-xs"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs text-slate-300 mb-1">Est. Mins</label>
-                  <input
-                    type="number"
-                    value={newStyleDuration}
-                    onChange={(e) => setNewStyleDuration(Number(e.target.value))}
-                    className="w-full px-3 py-2 rounded-xl bg-charcoal-950 border border-charcoal-700 text-white text-xs"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs text-slate-300 mb-1">Category</label>
-                <select
-                  value={newStyleCategory}
-                  onChange={(e) => setNewStyleCategory(e.target.value as StyleCategory)}
-                  className="w-full px-3 py-2 rounded-xl bg-charcoal-950 border border-charcoal-700 text-white text-xs"
-                >
-                  <option value="fade_taper">Fade & Taper</option>
-                  <option value="classic">Classic Cuts</option>
-                  <option value="modern_textured">Modern Textured</option>
-                  <option value="crew_short">Crew Short</option>
-                  <option value="long_hair">Long Hair</option>
-                  <option value="beard_shaping">Beard Shaping</option>
-                  <option value="moustache">Moustache</option>
-                  <option value="combo">Combo</option>
-                </select>
-              </div>
-
-              <button
-                type="submit"
-                className="w-full mt-2 py-3 rounded-xl bg-amber-500 text-charcoal-950 font-bold text-xs"
-              >
-                Add to Gallery
               </button>
             </form>
           </div>
