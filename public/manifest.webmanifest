@@ -1,0 +1,43 @@
+{
+  "name": "Farhaan Men's Saloon - Smart Queue & Booking",
+  "short_name": "Farhaan Saloon",
+  "description": "Smart live queue tracking, barber selection, haircut styles and online appointments for Farhaan Men's Saloon.",
+  "start_url": "/",
+  "id": "/",
+  "display": "standalone",
+  "background_color": "#111217",
+  "theme_color": "#111217",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["lifestyle", "utilities", "business"],
+  "shortcuts": [
+    {
+      "name": "Live Queue",
+      "short_name": "Queue",
+      "description": "Check your live queue status or grab a token",
+      "url": "/#queue",
+      "icons": [{ "src": "/icon.svg", "sizes": "192x192" }]
+    },
+    {
+      "name": "Our Barbers",
+      "short_name": "Barbers",
+      "description": "Check waiting times & choose a barber",
+      "url": "/#barbers",
+      "icons": [{ "src": "/icon.svg", "sizes": "192x192" }]
+    },
+    {
+      "name": "Styles Gallery",
+      "short_name": "Styles",
+      "description": "Trending haircut and beard styles",
+      "url": "/#styles",
+      "icons": [{ "src": "/icon.svg", "sizes": "192x192" }]
+    }
+  ]
+}
