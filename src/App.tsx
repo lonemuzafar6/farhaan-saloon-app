@@ -13,11 +13,13 @@ import { BarberDashboard } from './components/barber/BarberDashboard';
 import { AdminDashboard } from './components/admin/AdminDashboard';
 import { HaircutStyle } from './types';
 import { Scissors, Phone, Heart, Shield } from 'lucide-react';
+import { StaffLoginModal } from './components/StaffLoginModal';
 
 const MainAppContent: React.FC = () => {
   const { activeRole, settings } = useSaloon();
   const [customerTab, setCustomerTab] = useState<'queue' | 'barbers' | 'styles' | 'booking'>('queue');
   const [preselectedStyle, setPreselectedStyle] = useState<HaircutStyle | null>(null);
+  const [showStaffModal, setShowStaffModal] = useState(false);
 
   const handleSelectStyleForQueue = (style: HaircutStyle) => {
     setPreselectedStyle(style);
@@ -101,6 +103,15 @@ const MainAppContent: React.FC = () => {
             <p className="text-[11px] text-slate-400 mt-1">
               Smart Live Queue & Barber Appointment System • Default Timezone: {settings.timezone}
             </p>
+            <div className="mt-2 flex items-center justify-center sm:justify-start gap-4">
+              <button
+                onClick={() => setShowStaffModal(true)}
+                className="text-[11px] text-slate-500 hover:text-amber-400 transition-colors flex items-center gap-1 font-medium"
+              >
+                <Shield className="w-3 h-3 text-amber-500" />
+                <span>Barber & Owner Access (Staff PIN)</span>
+              </button>
+            </div>
           </div>
 
           <div className="p-2.5 rounded-xl bg-charcoal-950 border border-charcoal-800 text-center sm:text-right">
@@ -124,6 +135,9 @@ const MainAppContent: React.FC = () => {
           </div>
         </div>
       </footer>
+
+      {/* Staff Login Modal from Footer */}
+      <StaffLoginModal isOpen={showStaffModal} onClose={() => setShowStaffModal(false)} />
     </div>
   );
 };

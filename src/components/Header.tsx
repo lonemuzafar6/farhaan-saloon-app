@@ -1,9 +1,13 @@
-import React from 'react';
-import { Scissors, UserCheck, Shield, Users, Bell, Clock, MapPin } from 'lucide-react';
+import React, { useState } from 'react';
+import { Scissors, UserCheck, Shield, Users, Bell, Clock, MapPin, Lock, LogOut } from 'lucide-react';
 import { useSaloon } from '../context/SaloonContext';
+import { StaffLoginModal } from './StaffLoginModal';
 
 export const Header: React.FC = () => {
-  const { settings, activeRole, setActiveRole, requestNotificationPermission } = useSaloon();
+  const { settings, activeRole, setActiveRole, activeBarberId, barbers, requestNotificationPermission } = useSaloon();
+  const [showStaffModal, setShowStaffModal] = useState(false);
+
+  const currentBarber = barbers.find((b) => b.id === activeBarberId) || barbers[0];
 
   const handleNotificationClick = async () => {
     const granted = await requestNotificationPermission();
@@ -49,64 +53,101 @@ export const Header: React.FC = () => {
             </div>
           </div>
 
-          <button
-            onClick={handleNotificationClick}
-            className="sm:hidden p-2 rounded-lg bg-charcoal-800 text-slate-300 hover:text-amber-400 transition-colors"
-            title="Enable notifications"
-          >
-            <Bell className="w-4 h-4" />
-          </button>
+          <div className="flex items-center gap-2 sm:hidden">
+            <button
+              onClick={handleNotificationClick}
+              className="p-2 rounded-lg bg-charcoal-800 text-slate-300 hover:text-amber-400 transition-colors"
+              title="Enable notifications"
+            >
+              <Bell className="w-4 h-4" />
+            </button>
+
+            {activeRole === 'customer' ? (
+              <button
+                onClick={() => setShowStaffModal(true)}
+                className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-charcoal-800 text-amber-400 font-bold text-xs border border-charcoal-700"
+                title="Staff & Owner Portal"
+              >
+                <Lock className="w-3.5 h-3.5" />
+                <span>Staff</span>
+              </button>
+            ) : (
+              <button
+                onClick={() => setActiveRole('customer')}
+                className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-rose-500/20 text-rose-400 font-bold text-xs border border-rose-500/30"
+              >
+                <Lock className="w-3.5 h-3.5" />
+                <span>Exit</span>
+              </button>
+            )}
+          </div>
         </div>
 
-        {/* Role Navigation Switcher (Customer / Barber / Admin) */}
-        <div className="flex items-center gap-2 w-full sm:w-auto justify-between">
-          <div className="inline-flex p-1 bg-charcoal-950 rounded-xl border border-charcoal-800 w-full sm:w-auto">
-            <button
-              onClick={() => setActiveRole('customer')}
-              className={`flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                activeRole === 'customer'
-                  ? 'bg-amber-500 text-charcoal-950 shadow-sm'
-                  : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              <Users className="w-3.5 h-3.5" />
-              <span>Customer</span>
-            </button>
-
-            <button
-              onClick={() => setActiveRole('barber')}
-              className={`flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                activeRole === 'barber'
-                  ? 'bg-amber-500 text-charcoal-950 shadow-sm'
-                  : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              <UserCheck className="w-3.5 h-3.5" />
-              <span>Barber</span>
-            </button>
-
-            <button
-              onClick={() => setActiveRole('admin')}
-              className={`flex-1 sm:flex-initial flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                activeRole === 'admin'
-                  ? 'bg-amber-500 text-charcoal-950 shadow-sm'
-                  : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              <Shield className="w-3.5 h-3.5" />
-              <span>Owner Admin</span>
-            </button>
-          </div>
-
+        {/* Right Action Controls: Notification + Role-Specific Actions */}
+        <div className="hidden sm:flex items-center gap-3">
           <button
             onClick={handleNotificationClick}
-            className="hidden sm:flex items-center gap-1 p-2 rounded-lg bg-charcoal-800 text-slate-300 hover:text-amber-400 transition-colors"
+            className="flex items-center gap-1 p-2 rounded-lg bg-charcoal-800 text-slate-300 hover:text-amber-400 transition-colors"
             title="Enable push notifications"
           >
             <Bell className="w-4 h-4" />
           </button>
+
+          {activeRole === 'customer' && (
+            <button
+              onClick={() => setShowStaffModal(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-charcoal-800 hover:bg-charcoal-700 text-slate-300 hover:text-amber-400 text-xs font-semibold border border-charcoal-700 transition-colors"
+              title="Barber and Owner access with PIN"
+            >
+              <Lock className="w-3.5 h-3.5 text-amber-400" />
+              <span>Staff Login</span>
+            </button>
+          )}
+
+          {activeRole === 'barber' && (
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-charcoal-950 border border-charcoal-800 text-xs">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                <span className="font-bold text-white">Station: {currentBarber.name}</span>
+              </div>
+              <button
+                onClick={() => {
+                  sessionStorage.removeItem(`farhaan_barber_authed_${activeBarberId}`);
+                  setActiveRole('customer');
+                }}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-400 text-xs font-bold border border-rose-500/30 transition-colors"
+                title="Lock workstation and return to customer view"
+              >
+                <Lock className="w-3.5 h-3.5" />
+                <span>Exit Workstation</span>
+              </button>
+            </div>
+          )}
+
+          {activeRole === 'admin' && (
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs font-bold text-amber-400">
+                <Shield className="w-3.5 h-3.5" />
+                <span>Admin Suite</span>
+              </div>
+              <button
+                onClick={() => {
+                  sessionStorage.removeItem('farhaan_admin_authed');
+                  setActiveRole('customer');
+                }}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-400 text-xs font-bold border border-rose-500/30 transition-colors"
+                title="Exit admin and return to customer view"
+              >
+                <Lock className="w-3.5 h-3.5" />
+                <span>Exit Admin</span>
+              </button>
+            </div>
+          )}
         </div>
       </div>
+
+      {/* Staff Login Modal */}
+      <StaffLoginModal isOpen={showStaffModal} onClose={() => setShowStaffModal(false)} />
     </header>
   );
 };

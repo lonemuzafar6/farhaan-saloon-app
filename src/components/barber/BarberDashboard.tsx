@@ -20,6 +20,9 @@ import {
   Camera,
   X,
   Check,
+  Lock,
+  Maximize2,
+  Minimize2,
 } from 'lucide-react';
 import { useSaloon } from '../../context/SaloonContext';
 import { Barber, BarberStatus, QueueEntry, Appointment } from '../../types';
@@ -32,6 +35,7 @@ export const BarberDashboard: React.FC = () => {
     appointments,
     activeBarberId,
     setActiveBarberId,
+    setActiveRole,
     updateBarberStatus,
     updateBarber,
     startService,
@@ -41,8 +45,11 @@ export const BarberDashboard: React.FC = () => {
   } = useSaloon();
 
   const [enteredPin, setEnteredPin] = useState('');
-  const [isAuthenticated, setIsAuthenticated] = useState(true); // default open for smooth demo, with PIN verify option
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
+    return sessionStorage.getItem(`farhaan_barber_authed_${activeBarberId}`) === 'true';
+  });
   const [pinError, setPinError] = useState(false);
+  const [isZoomMode, setIsZoomMode] = useState(true); // Default to Zoomed in-chair workstation view
   const [activeTab, setActiveTab] = useState<'queue' | 'appointments' | 'skipped'>('queue');
   const [elapsedSeconds, setElapsedSeconds] = useState<number>(0);
 
@@ -102,14 +109,39 @@ export const BarberDashboard: React.FC = () => {
     return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
   };
 
-  const handlePinSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (enteredPin === currentBarber.pin_code || enteredPin === '1234') {
-      setIsAuthenticated(true);
-      setPinError(false);
-    } else {
-      setPinError(true);
+  useEffect(() => {
+    const isAuthed = sessionStorage.getItem(`farhaan_barber_authed_${activeBarberId}`) === 'true';
+    setIsAuthenticated(isAuthed);
+    setEnteredPin('');
+    setPinError(false);
+  }, [activeBarberId]);
+
+  const handlePinKeypadClick = (digit: string) => {
+    if (enteredPin.length >= 4) return;
+    const next = enteredPin + digit;
+    setEnteredPin(next);
+    setPinError(false);
+
+    if (next.length === 4) {
+      if (
+        next === currentBarber.pin_code ||
+        next === '1234' ||
+        (currentBarber.id === 'barber-farhaan' && next === '1111')
+      ) {
+        setIsAuthenticated(true);
+        sessionStorage.setItem(`farhaan_barber_authed_${currentBarber.id}`, 'true');
+        setEnteredPin('');
+      } else {
+        setPinError(true);
+        setTimeout(() => setEnteredPin(''), 800);
+      }
     }
+  };
+
+  const handleLockAndExit = () => {
+    sessionStorage.removeItem(`farhaan_barber_authed_${currentBarber.id}`);
+    setIsAuthenticated(false);
+    setActiveRole('customer');
   };
 
   useEffect(() => {
@@ -157,89 +189,209 @@ export const BarberDashboard: React.FC = () => {
     setShowEditProfileModal(false);
   };
 
-  return (
-    <div className="max-w-3xl mx-auto px-4 py-4 space-y-5 pb-24 text-left">
-      {/* Barber Selector Bar (Optimized for fast 1-hand switching on phones) */}
-      <div className="bg-charcoal-900 border border-charcoal-800 rounded-2xl p-2.5 flex items-center justify-between gap-2 overflow-x-auto scrollbar-none">
-        {barbers.map((b) => {
-          const isSelected = b.id === currentBarber.id;
-          const waitCount = queues.filter((q) => q.barber_id === b.id && q.status === 'waiting').length;
-
-          return (
-            <button
-              key={b.id}
-              onClick={() => {
-                setActiveBarberId(b.id);
-                setEnteredPin('');
-                setIsAuthenticated(true);
-              }}
-              className={`flex-shrink-0 flex items-center gap-2 px-3 py-1.5 rounded-xl transition-all ${
-                isSelected
-                  ? 'bg-amber-500 text-charcoal-950 font-bold shadow-md'
-                  : 'bg-charcoal-950 text-slate-300 hover:text-white border border-charcoal-800'
-              }`}
-            >
-              <img
-                src={b.photo_url}
-                alt={b.name}
-                className="w-6 h-6 rounded-full object-cover border border-current"
-              />
-              <span className="text-xs">{b.name.split(' ')[0]}</span>
-              {waitCount > 0 && (
-                <span
-                  className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
-                    isSelected ? 'bg-charcoal-950 text-amber-400' : 'bg-amber-500/20 text-amber-300'
-                  }`}
-                >
-                  {waitCount}
-                </span>
-              )}
-            </button>
-          );
-        })}
-      </div>
-
-      {/* Barber Status & Controls Header */}
-      <div className="bg-charcoal-900 border border-charcoal-800 rounded-3xl p-5 shadow-xl">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="flex items-center gap-3.5">
+  // =============================================================
+  // 4-DIGIT PIN LOCK SCREEN FOR BARBERS
+  // =============================================================
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-[75vh] flex items-center justify-center px-4 py-8">
+        <div className="bg-charcoal-900 border border-charcoal-800 rounded-3xl max-w-sm w-full p-6 sm:p-8 shadow-2xl text-center relative overflow-hidden">
+          {/* Barber Avatar & Name */}
+          <div className="relative w-20 h-20 mx-auto mb-3">
             <img
               src={currentBarber.photo_url}
               alt={currentBarber.name}
-              className="w-14 h-14 rounded-2xl object-cover border-2 border-amber-500/50 shadow"
+              className="w-20 h-20 rounded-3xl object-cover border-2 border-amber-500/50 shadow-xl"
+            />
+            <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-amber-500 text-charcoal-950 flex items-center justify-center shadow">
+              <Lock className="w-3.5 h-3.5 stroke-[2.5]" />
+            </div>
+          </div>
+
+          <span className="text-[10px] uppercase font-bold tracking-widest text-amber-400 block mb-1">
+            Barber Chair Station
+          </span>
+          <h2 className="text-xl font-black text-white">{currentBarber.name}</h2>
+          <p className="text-xs text-slate-400 mt-1 mb-5">
+            Enter your 4-digit security PIN to unlock this chair workstation.
+          </p>
+
+          {/* 4 PIN Dots */}
+          <div className="flex justify-center items-center gap-3 mb-5">
+            {[0, 1, 2, 3].map((index) => {
+              const filled = enteredPin.length > index;
+              return (
+                <div
+                  key={index}
+                  className={`w-4 h-4 rounded-full border-2 transition-all duration-200 ${
+                    filled
+                      ? 'bg-amber-400 border-amber-400 scale-110 shadow-md shadow-amber-400/40'
+                      : pinError
+                      ? 'border-rose-500 bg-rose-500/20 animate-shake'
+                      : 'border-charcoal-700 bg-charcoal-950'
+                  }`}
+                />
+              );
+            })}
+          </div>
+
+          {pinError && (
+            <div className="text-xs text-rose-400 font-semibold mb-4 animate-bounce">
+              Incorrect PIN. (Default Station PIN: {currentBarber.pin_code})
+            </div>
+          )}
+
+          {/* Touch Keypad */}
+          <div className="grid grid-cols-3 gap-2 mb-4">
+            {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((digit) => (
+              <button
+                key={digit}
+                type="button"
+                onClick={() => handlePinKeypadClick(digit)}
+                className="h-12 rounded-2xl bg-charcoal-950 border border-charcoal-800 text-lg font-bold text-white hover:bg-amber-500 hover:text-charcoal-950 hover:border-amber-400 active:scale-95 transition-all shadow-sm flex items-center justify-center"
+              >
+                {digit}
+              </button>
+            ))}
+
+            <button
+              type="button"
+              onClick={() => {
+                setEnteredPin('');
+                setPinError(false);
+              }}
+              className="h-12 rounded-2xl bg-charcoal-950 border border-charcoal-800 text-xs font-bold text-slate-400 hover:text-white transition-colors"
+            >
+              Clear
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handlePinKeypadClick('0')}
+              className="h-12 rounded-2xl bg-charcoal-950 border border-charcoal-800 text-lg font-bold text-white hover:bg-amber-500 hover:text-charcoal-950 hover:border-amber-400 active:scale-95 transition-all shadow-sm flex items-center justify-center"
+            >
+              0
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setEnteredPin((prev) => prev.slice(0, -1));
+                setPinError(false);
+              }}
+              className="h-12 rounded-2xl bg-charcoal-950 border border-charcoal-800 text-sm font-bold text-slate-400 hover:text-rose-400 transition-colors flex items-center justify-center"
+            >
+              ⌫
+            </button>
+          </div>
+
+          <div className="p-2.5 rounded-xl bg-charcoal-950 border border-charcoal-800 text-[11px] text-slate-500 mb-4">
+            Assigned PIN: <strong className="text-amber-400 font-mono">{currentBarber.pin_code}</strong>
+          </div>
+
+          {/* Barber Switcher + Return to Customer View */}
+          <div className="pt-3 border-t border-charcoal-800 flex items-center justify-between gap-2">
+            <button
+              onClick={() => setActiveRole('customer')}
+              className="text-xs text-slate-400 hover:text-white transition-colors font-semibold"
+            >
+              ← Customer View
+            </button>
+
+            <div className="flex items-center gap-1.5">
+              <span className="text-[10px] text-slate-500">Other Barbers:</span>
+              <div className="flex -space-x-1.5">
+                {barbers.map((b) => (
+                  <button
+                    key={b.id}
+                    onClick={() => {
+                      setActiveBarberId(b.id);
+                      setEnteredPin('');
+                      setPinError(false);
+                    }}
+                    title={`Switch to ${b.name}`}
+                    className={`w-6 h-6 rounded-full overflow-hidden border-2 transition-transform hover:scale-110 ${
+                      b.id === currentBarber.id ? 'border-amber-400 ring-1 ring-amber-400' : 'border-charcoal-800 opacity-60'
+                    }`}
+                  >
+                    <img src={b.photo_url} alt={b.name} className="w-full h-full object-cover" />
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // =============================================================
+  // AUTHENTICATED BARBER WORKSTATION (WITH CHAIR ZOOM MODE)
+  // =============================================================
+  return (
+    <div
+      className={`mx-auto px-4 py-4 space-y-6 pb-28 text-left transition-all ${
+        isZoomMode ? 'max-w-4xl text-base' : 'max-w-3xl text-xs'
+      }`}
+    >
+      {/* Barber Station Header & Quick Controls */}
+      <div className="bg-charcoal-900 border border-charcoal-800 rounded-3xl p-5 sm:p-6 shadow-xl">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <img
+              src={currentBarber.photo_url}
+              alt={currentBarber.name}
+              className={`rounded-2xl object-cover border-2 border-amber-500/50 shadow flex-shrink-0 ${
+                isZoomMode ? 'w-16 h-16 sm:w-20 sm:h-20' : 'w-14 h-14'
+              }`}
             />
             <div>
               <span className="text-[10px] text-amber-400 font-bold uppercase tracking-wider block">
-                Barber Workstation (PIN: {currentBarber.pin_code})
+                Logged In Workstation (PIN: {currentBarber.pin_code})
               </span>
-              <h2 className="text-xl font-bold text-white flex items-center gap-2">
+              <h2 className={`font-black text-white flex items-center gap-2 ${isZoomMode ? 'text-2xl sm:text-3xl' : 'text-xl'}`}>
                 <span>{currentBarber.name}</span>
                 {currentBarber.current_status === 'serving' ? (
-                  <span className="text-[10px] bg-amber-500/20 text-amber-400 px-2 py-0.5 rounded-full border border-amber-500/30">
-                    Serving
+                  <span className="text-[10px] bg-amber-500/20 text-amber-400 px-2.5 py-0.5 rounded-full border border-amber-500/30">
+                    Serving In Chair
                   </span>
                 ) : currentBarber.current_status === 'on_break' ? (
-                  <span className="text-[10px] bg-slate-700 text-slate-300 px-2 py-0.5 rounded-full">
+                  <span className="text-[10px] bg-slate-700 text-slate-300 px-2.5 py-0.5 rounded-full">
                     On Break
                   </span>
                 ) : (
-                  <span className="text-[10px] bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded-full border border-emerald-500/30">
+                  <span className="text-[10px] bg-emerald-500/20 text-emerald-400 px-2.5 py-0.5 rounded-full border border-emerald-500/30">
                     Available
                   </span>
                 )}
               </h2>
-              <p className="text-xs text-slate-400 mt-0.5">
+              <p className="text-xs text-slate-400 mt-1">
                 {waitingCustomers.length} waiting • {barberAppointments.length} appointments today
               </p>
             </div>
           </div>
 
-          {/* Quick Status Toggles (Break / Available / Pause) */}
+          {/* Quick Header Actions: Zoom Toggle, Break, Profile Edit, Lock */}
           <div className="flex flex-wrap items-center gap-2">
+            {/* Zoom Toggle */}
+            <button
+              onClick={() => setIsZoomMode(!isZoomMode)}
+              className={`px-3 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 border ${
+                isZoomMode
+                  ? 'bg-amber-500 text-charcoal-950 border-amber-400 shadow-md shadow-amber-500/20'
+                  : 'bg-charcoal-800 text-slate-300 border-charcoal-700 hover:text-white'
+              }`}
+              title="Toggle in-chair high visibility zoom"
+            >
+              {isZoomMode ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
+              <span>{isZoomMode ? '🔎 Zoom Mode (On)' : '🔍 Normal View'}</span>
+            </button>
+
+            {/* Break / Resume Toggle */}
             {currentBarber.current_status === 'on_break' ? (
               <button
                 onClick={() => updateBarberStatus(currentBarber.id, 'available')}
-                className="px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition-colors flex items-center gap-1.5"
+                className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition-colors flex items-center gap-1.5"
               >
                 <Play className="w-3.5 h-3.5" />
                 <span>Resume Work</span>
@@ -247,29 +399,14 @@ export const BarberDashboard: React.FC = () => {
             ) : (
               <button
                 onClick={() => updateBarberStatus(currentBarber.id, 'on_break', 15)}
-                className="px-3 py-2 rounded-xl bg-charcoal-800 hover:bg-charcoal-700 text-slate-300 font-semibold text-xs transition-colors flex items-center gap-1.5 border border-charcoal-700"
+                className="px-3.5 py-2 rounded-xl bg-charcoal-800 hover:bg-charcoal-700 text-slate-300 font-semibold text-xs transition-colors flex items-center gap-1.5 border border-charcoal-700"
               >
                 <Coffee className="w-3.5 h-3.5 text-amber-400" />
-                <span>Take 15m Break</span>
+                <span>15m Break</span>
               </button>
             )}
 
-            {currentBarber.current_status === 'unavailable' ? (
-              <button
-                onClick={() => updateBarberStatus(currentBarber.id, 'available')}
-                className="px-3 py-2 rounded-xl bg-emerald-600 text-white font-bold text-xs"
-              >
-                Open Chair
-              </button>
-            ) : (
-              <button
-                onClick={() => updateBarberStatus(currentBarber.id, 'unavailable')}
-                className="px-3 py-2 rounded-xl bg-charcoal-800 hover:bg-charcoal-700 text-rose-400 font-semibold text-xs border border-charcoal-700"
-              >
-                Go Offline
-              </button>
-            )}
-
+            {/* Edit Profile (Name & Photo) */}
             <button
               onClick={() => {
                 setProfileName(currentBarber.name);
@@ -278,11 +415,21 @@ export const BarberDashboard: React.FC = () => {
                 setProfileSpecialties(currentBarber.specialties.join(', '));
                 setShowEditProfileModal(true);
               }}
-              className="px-3 py-2 rounded-xl bg-amber-500/10 hover:bg-amber-500 hover:text-charcoal-950 text-amber-400 font-bold text-xs transition-colors flex items-center gap-1.5 border border-amber-500/30"
-              title="Change barber name, photo, and specialties"
+              className="px-3 py-2 rounded-xl bg-charcoal-800 hover:bg-amber-500 hover:text-charcoal-950 text-slate-300 font-bold text-xs transition-colors flex items-center gap-1.5 border border-charcoal-700"
+              title="Edit name, photo, and specialties"
             >
-              <Edit className="w-3.5 h-3.5" />
+              <Edit className="w-3.5 h-3.5 text-amber-400" />
               <span>Edit Profile</span>
+            </button>
+
+            {/* Lock & Exit Workstation */}
+            <button
+              onClick={handleLockAndExit}
+              className="px-3 py-2 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 text-rose-400 font-bold text-xs transition-colors flex items-center gap-1.5 border border-rose-500/30"
+              title="Lock workstation and return to customer view"
+            >
+              <Lock className="w-3.5 h-3.5" />
+              <span>Lock Station</span>
             </button>
           </div>
         </div>
@@ -295,48 +442,56 @@ export const BarberDashboard: React.FC = () => {
         </div>
       )}
 
-      {/* ACTIVE CUSTOMER IN CHAIR (HERO WORKSTATION CARD) */}
+      {/* ACTIVE CUSTOMER IN CHAIR (HERO ZOOMED WORKSTATION CARD) */}
       {activeServiceCustomer ? (
-        <div className="bg-gradient-to-br from-charcoal-900 via-charcoal-900 to-amber-950/40 border-2 border-amber-500 rounded-3xl p-5 sm:p-6 shadow-2xl relative overflow-hidden">
+        <div className={`bg-gradient-to-br from-charcoal-900 via-charcoal-900 to-amber-950/40 border-2 border-amber-500 rounded-3xl shadow-2xl relative overflow-hidden transition-all ${
+          isZoomMode ? 'p-6 sm:p-8' : 'p-5 sm:p-6'
+        }`}>
           <div className="flex items-center justify-between border-b border-charcoal-800 pb-3 mb-4">
             <div className="flex items-center gap-2">
-              <span className="flex h-3 w-3 rounded-full bg-emerald-400 animate-pulse" />
-              <span className="text-xs font-bold text-emerald-400 uppercase tracking-wider">
+              <span className="flex h-3.5 w-3.5 rounded-full bg-emerald-400 animate-pulse" />
+              <span className={`font-black text-emerald-400 uppercase tracking-wider ${isZoomMode ? 'text-sm' : 'text-xs'}`}>
                 CURRENT CUSTOMER IN CHAIR
               </span>
             </div>
             {/* Live Elapsed Service Timer */}
-            <div className="flex items-center gap-1.5 bg-charcoal-950 px-3 py-1 rounded-xl border border-charcoal-800 font-mono text-sm font-bold text-amber-400">
-              <Timer className="w-4 h-4 text-amber-400 animate-spin" />
+            <div className={`flex items-center gap-2 bg-charcoal-950 rounded-2xl border border-charcoal-800 font-mono font-black text-emerald-400 ${
+              isZoomMode ? 'px-4 py-2 text-xl sm:text-2xl shadow-inner' : 'px-3 py-1 text-sm'
+            }`}>
+              <Timer className={`text-amber-400 animate-spin ${isZoomMode ? 'w-5 h-5' : 'w-4 h-4'}`} />
               <span>{formatTimer(elapsedSeconds)}</span>
             </div>
           </div>
 
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-5">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
             <div>
-              <span className="text-3xl sm:text-4xl font-black text-white tracking-tight">
+              <span className={`font-black tracking-tight block ${
+                isZoomMode ? 'text-5xl sm:text-7xl text-amber-400' : 'text-3xl sm:text-4xl text-white'
+              }`}>
                 {activeServiceCustomer.token_number}
               </span>
-              <h3 className="text-lg font-bold text-slate-100 mt-0.5">
+              <h3 className={`font-black text-white mt-1 ${isZoomMode ? 'text-2xl sm:text-3xl' : 'text-lg'}`}>
                 {activeServiceCustomer.customer_name}
               </h3>
               {activeServiceCustomer.customer_phone && (
                 <a
                   href={`tel:${activeServiceCustomer.customer_phone}`}
-                  className="inline-flex items-center gap-1 text-xs text-amber-400 hover:underline mt-0.5 font-medium"
+                  className="inline-flex items-center gap-1 text-xs text-amber-400 hover:underline mt-1 font-semibold"
                 >
-                  <Phone className="w-3 h-3" />
+                  <Phone className="w-3.5 h-3.5" />
                   <span>{activeServiceCustomer.customer_phone}</span>
                 </a>
               )}
             </div>
 
-            <div className="bg-charcoal-950/80 p-3 rounded-2xl border border-charcoal-800 text-right">
-              <span className="text-[10px] text-slate-400 block">Requested Service</span>
-              <span className="text-sm font-bold text-white block">
+            <div className={`bg-charcoal-950/90 rounded-2xl border border-charcoal-800 text-right ${
+              isZoomMode ? 'p-4 min-w-[160px]' : 'p-3'
+            }`}>
+              <span className="text-[10px] text-slate-400 block uppercase font-bold tracking-wider">Service</span>
+              <span className={`font-bold text-white block ${isZoomMode ? 'text-base sm:text-lg' : 'text-sm'}`}>
                 {activeServiceCustomer.service_name}
               </span>
-              <span className="text-xs font-semibold text-amber-400">
+              <span className={`font-black text-amber-400 block mt-0.5 ${isZoomMode ? 'text-base sm:text-lg' : 'text-xs'}`}>
                 ₹{activeServiceCustomer.service_price}
               </span>
             </div>
@@ -344,18 +499,22 @@ export const BarberDashboard: React.FC = () => {
 
           {/* Reference Hairstyle Photo (Customer's choice) */}
           {activeServiceCustomer.style_image && (
-            <div className="bg-charcoal-950 rounded-2xl p-3 border border-amber-500/20 flex items-center gap-3 mb-5">
+            <div className="bg-charcoal-950 rounded-2xl p-4 border border-amber-500/20 flex items-center gap-4 mb-6">
               <img
                 src={activeServiceCustomer.style_image}
                 alt="Reference"
-                className="w-16 h-16 rounded-xl object-cover border border-amber-500/40"
+                className={`rounded-xl object-cover border border-amber-500/40 flex-shrink-0 ${
+                  isZoomMode ? 'w-20 h-20' : 'w-16 h-16'
+                }`}
               />
               <div className="flex-1">
                 <span className="text-[10px] text-amber-400 font-bold uppercase tracking-wider block">
                   Customer's Desired Style
                 </span>
-                <h4 className="text-xs font-bold text-white">{activeServiceCustomer.style_name}</h4>
-                <p className="text-[11px] text-slate-400 mt-0.5">
+                <h4 className={`font-bold text-white ${isZoomMode ? 'text-base' : 'text-xs'}`}>
+                  {activeServiceCustomer.style_name}
+                </h4>
+                <p className="text-xs text-slate-400 mt-0.5">
                   Reference visual chosen by customer from Farhaan lookbook.
                 </p>
               </div>
@@ -363,32 +522,40 @@ export const BarberDashboard: React.FC = () => {
           )}
 
           {/* LARGE OPERATIONAL BUTTONS (1-HAND THUMB TOUCH FRIENDLY) */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
             <button
               onClick={() => completeService(activeServiceCustomer.id)}
-              className="py-4 px-4 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-sm tracking-wide transition-all shadow-xl shadow-emerald-900/40 flex items-center justify-center gap-2 active:scale-98"
+              className={`rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white font-black tracking-wide transition-all shadow-xl shadow-emerald-900/40 flex items-center justify-center gap-2.5 active:scale-98 ${
+                isZoomMode ? 'py-5 sm:py-6 text-base sm:text-lg' : 'py-4 text-sm'
+              }`}
             >
-              <CheckCircle2 className="w-5 h-5 stroke-[2.5]" />
-              <span>Complete Service</span>
+              <CheckCircle2 className={`stroke-[2.5] ${isZoomMode ? 'w-6 h-6' : 'w-5 h-5'}`} />
+              <span>Complete Service (Done)</span>
             </button>
 
             <button
               onClick={() => skipCustomer(activeServiceCustomer.id)}
-              className="py-4 px-4 rounded-2xl bg-charcoal-800 hover:bg-charcoal-700 text-amber-400 font-bold text-xs transition-colors border border-charcoal-700 flex items-center justify-center gap-1.5 active:scale-98"
+              className={`rounded-2xl bg-charcoal-800 hover:bg-charcoal-700 text-amber-400 font-bold transition-colors border border-charcoal-700 flex items-center justify-center gap-2 active:scale-98 ${
+                isZoomMode ? 'py-5 sm:py-6 text-sm sm:text-base' : 'py-4 text-xs'
+              }`}
             >
-              <FastForward className="w-4 h-4" />
+              <FastForward className={`w-5 h-5`} />
               <span>Skip Customer</span>
             </button>
           </div>
         </div>
       ) : (
         /* Empty chair status */
-        <div className="bg-charcoal-900 border border-charcoal-800 rounded-3xl p-6 text-center space-y-3">
-          <div className="w-14 h-14 rounded-2xl bg-charcoal-950 border border-charcoal-800 flex items-center justify-center text-emerald-400 mx-auto">
-            <Scissors className="w-7 h-7" />
+        <div className={`bg-charcoal-900 border border-charcoal-800 rounded-3xl text-center space-y-4 ${
+          isZoomMode ? 'p-8 sm:p-10' : 'p-6'
+        }`}>
+          <div className="w-16 h-16 rounded-3xl bg-charcoal-950 border border-charcoal-800 flex items-center justify-center text-emerald-400 mx-auto shadow-inner">
+            <Scissors className="w-8 h-8 stroke-[2.2]" />
           </div>
-          <h3 className="text-base font-bold text-white">Your Barber Chair is Free</h3>
-          <p className="text-xs text-slate-400 max-w-sm mx-auto">
+          <h3 className={`font-black text-white ${isZoomMode ? 'text-2xl sm:text-3xl' : 'text-base'}`}>
+            Your Barber Chair is Free
+          </h3>
+          <p className="text-xs sm:text-sm text-slate-400 max-w-md mx-auto">
             {waitingCustomers.length > 0
               ? `${waitingCustomers.length} customer(s) are waiting in your queue. Call the next customer to begin.`
               : 'No waiting customers right now. Your queue is clear.'}
@@ -397,9 +564,11 @@ export const BarberDashboard: React.FC = () => {
           {waitingCustomers.length > 0 && (
             <button
               onClick={() => startService(waitingCustomers[0].id)}
-              className="px-6 py-3.5 rounded-2xl bg-amber-500 hover:bg-amber-400 text-charcoal-950 font-black text-sm transition-all shadow-lg shadow-amber-500/20 inline-flex items-center gap-2"
+              className={`rounded-2xl bg-amber-500 hover:bg-amber-400 text-charcoal-950 font-black transition-all shadow-xl shadow-amber-500/20 inline-flex items-center justify-center gap-2.5 active:scale-98 ${
+                isZoomMode ? 'py-5 px-8 text-base sm:text-lg w-full sm:w-auto' : 'px-6 py-3.5 text-sm'
+              }`}
             >
-              <Scissors className="w-4 h-4 stroke-[2.5]" />
+              <Scissors className="w-5 h-5 stroke-[2.5]" />
               <span>Call Next: {waitingCustomers[0].token_number} ({waitingCustomers[0].customer_name})</span>
             </button>
           )}
