@@ -33,11 +33,20 @@ import {
   QrCode,
   Printer,
   Download,
+  Cloud,
+  UploadCloud,
+  RefreshCw,
+  Database,
+  Copy,
+  FileJson,
+  DownloadCloud,
+  ExternalLink,
 } from 'lucide-react';
 import { useSaloon } from '../../context/SaloonContext';
 import { calculateBarberWaitTime } from '../../lib/queueAlgorithm';
 import { Barber, Service, HaircutStyle, QueueEntry, StyleCategory } from '../../types';
 import { compressImageFile } from '../../utils/imageCompressor';
+import { SUPABASE_MIGRATION_SQL } from '../../data/migrationSql';
 
 const PRESET_BARBER_AVATARS = [
   { label: 'Master Farhaan', url: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&auto=format&fit=crop&q=80' },
@@ -73,6 +82,11 @@ export const AdminDashboard: React.FC = () => {
     completeService,
     skipCustomer,
     resetAllDemoData,
+    cloudSyncState,
+    pushPhoneDataToCloud,
+    pullCloudData,
+    exportBackupJson,
+    importBackupJson,
   } = useSaloon();
 
   // 6-DIGIT PIN AUTHENTICATION STATE
@@ -81,6 +95,69 @@ export const AdminDashboard: React.FC = () => {
   });
   const [pinDigits, setPinDigits] = useState<string>('');
   const [pinError, setPinError] = useState<boolean>(false);
+
+  // Cloud Realtime Synchronization states
+  const [isSyncingCloud, setIsSyncingCloud] = useState<boolean>(false);
+  const [showCloudModal, setShowCloudModal] = useState<boolean>(false);
+  const [sqlCopied, setSqlCopied] = useState<boolean>(false);
+  const jsonImportInputRef = useRef<HTMLInputElement>(null);
+
+  const handlePushPhoneToCloud = async () => {
+    setIsSyncingCloud(true);
+    const res = await pushPhoneDataToCloud();
+    setIsSyncingCloud(false);
+    if (res.success) {
+      showToast('Photos & details synced to Cloud! PC & other devices updated.');
+    } else {
+      showToast(res.message);
+      if (res.message.includes('migration') || res.message.includes('SQL') || res.message.includes('table')) {
+        setShowCloudModal(true);
+      }
+    }
+  };
+
+  const handlePullFromCloud = async () => {
+    setIsSyncingCloud(true);
+    await pullCloudData();
+    setIsSyncingCloud(false);
+    showToast('Cloud data refreshed.');
+  };
+
+  const handleCopySql = () => {
+    navigator.clipboard.writeText(SUPABASE_MIGRATION_SQL);
+    setSqlCopied(true);
+    showToast('SQL Migration script copied to clipboard!');
+    setTimeout(() => setSqlCopied(false), 3000);
+  };
+
+  const handleExportJson = () => {
+    const jsonStr = exportBackupJson();
+    const blob = new Blob([jsonStr], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `farhaan-saloon-backup-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast('Backup JSON exported successfully!');
+  };
+
+  const handleImportJsonFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (re) => {
+      const text = re.target?.result as string;
+      const ok = importBackupJson(text);
+      if (ok) {
+        showToast('Salon data imported & applied!');
+        setShowCloudModal(false);
+      } else {
+        showToast('Error importing JSON. Invalid file format.');
+      }
+    };
+    reader.readAsText(file);
+  };
 
   // Active navigation tab inside admin
   const [activeTab, setActiveTab] = useState<
@@ -701,6 +778,74 @@ export const AdminDashboard: React.FC = () => {
               <span>Lock Admin</span>
             </button>
           </div>
+        </div>
+      </div>
+
+      {/* Real-time Cloud Synchronization & Multi-Device Sync Banner */}
+      <div className="bg-gradient-to-r from-charcoal-900 via-charcoal-900 to-amber-950/20 border border-charcoal-800 rounded-3xl p-4 sm:p-5 shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div className="flex items-start sm:items-center gap-3">
+          <div
+            className={`w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 border ${
+              cloudSyncState.status === 'connected'
+                ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30 shadow-lg shadow-emerald-500/10'
+                : cloudSyncState.status === 'needs_migration'
+                ? 'bg-amber-500/10 text-amber-400 border-amber-500/30'
+                : 'bg-rose-500/10 text-rose-400 border-rose-500/30'
+            }`}
+          >
+            <Cloud className="w-5 h-5" />
+          </div>
+          <div>
+            <div className="flex flex-wrap items-center gap-2">
+              <h4 className="text-sm font-bold text-white flex items-center gap-1.5">
+                Real-Time Cloud Synchronization
+              </h4>
+              {cloudSyncState.status === 'connected' && (
+                <span className="text-[10px] bg-emerald-500/20 text-emerald-300 font-semibold px-2 py-0.5 rounded-full border border-emerald-500/30 flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                  Live Connected
+                </span>
+              )}
+              {cloudSyncState.status === 'needs_migration' && (
+                <span className="text-[10px] bg-amber-500/20 text-amber-300 font-semibold px-2 py-0.5 rounded-full border border-amber-500/30">
+                  SQL Setup Needed
+                </span>
+              )}
+            </div>
+            <p className="text-xs text-slate-400 mt-0.5">
+              {cloudSyncState.message}
+              {cloudSyncState.lastSyncedAt && ` • Synced at ${cloudSyncState.lastSyncedAt}`}
+            </p>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={handlePushPhoneToCloud}
+            disabled={isSyncingCloud}
+            className="px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-charcoal-950 font-bold text-xs transition-all flex items-center gap-1.5 shadow disabled:opacity-50"
+            title="Push updated barber photos and salon details from this device into Cloud so PC and all customers get updated immediately"
+          >
+            <UploadCloud className="w-4 h-4" />
+            <span>{isSyncingCloud ? 'Syncing...' : 'Push Phone Data to Cloud'}</span>
+          </button>
+          <button
+            onClick={handlePullFromCloud}
+            disabled={isSyncingCloud}
+            className="px-3 py-2 rounded-xl bg-charcoal-800 hover:bg-charcoal-700 text-slate-200 text-xs font-semibold border border-charcoal-700 transition-colors flex items-center gap-1.5"
+            title="Pull latest data from Supabase"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isSyncingCloud ? 'animate-spin' : ''}`} />
+            <span>Refresh</span>
+          </button>
+          <button
+            onClick={() => setShowCloudModal(true)}
+            className="px-3 py-2 rounded-xl bg-charcoal-800 hover:bg-amber-500/10 text-amber-400 hover:text-amber-300 text-xs font-semibold border border-charcoal-700 hover:border-amber-500/30 transition-colors flex items-center gap-1.5"
+            title="Cloud Database SQL migration and Backup Tools"
+          >
+            <Database className="w-3.5 h-3.5" />
+            <span>SQL & Backup</span>
+          </button>
         </div>
       </div>
 
@@ -2135,6 +2280,122 @@ export const AdminDashboard: React.FC = () => {
                 Confirm Reassignment
               </button>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================= */}
+      {/* MODAL: CLOUD DATABASE SETUP & BACKUP TOOLS */}
+      {/* ========================================================= */}
+      {showCloudModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <div className="bg-charcoal-900 border border-charcoal-700 rounded-3xl max-w-xl w-full p-6 shadow-2xl relative text-left max-h-[90vh] overflow-y-auto">
+            <button
+              onClick={() => setShowCloudModal(false)}
+              className="absolute top-4 right-4 text-slate-400 hover:text-white"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-[10px] text-amber-400 font-bold uppercase tracking-wider">
+                Cross-Device Real-Time Sync
+              </span>
+              {cloudSyncState.status === 'connected' && (
+                <span className="text-[10px] bg-emerald-500/20 text-emerald-300 font-semibold px-2 py-0.5 rounded-full border border-emerald-500/30">
+                  Connected
+                </span>
+              )}
+            </div>
+
+            <h3 className="text-xl font-bold text-white mb-2 flex items-center gap-2">
+              <Cloud className="w-5 h-5 text-amber-400" />
+              <span>Cloud Database & Multi-Device Sync</span>
+            </h3>
+
+            <p className="text-xs text-slate-300 mb-5">
+              Sync photos, barber updates, and live tokens seamlessly between phone, PC, and all client devices in real time.
+            </p>
+
+            {/* Quick Action: Push Phone Data */}
+            <div className="bg-charcoal-950 border border-charcoal-800 rounded-2xl p-4 mb-5 space-y-3">
+              <h4 className="text-xs font-bold text-white flex items-center gap-1.5">
+                <UploadCloud className="w-4 h-4 text-amber-400" />
+                <span>1. Sync Phone Details & Photos to Cloud</span>
+              </h4>
+              <p className="text-xs text-slate-400">
+                If you made changes on this phone (changed photos, names, or prices), tap below to upload them to the shared Supabase cloud so they instantly appear on PC and for everyone else.
+              </p>
+              <button
+                onClick={handlePushPhoneToCloud}
+                disabled={isSyncingCloud}
+                className="w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-charcoal-950 font-bold text-xs flex items-center justify-center gap-2 shadow"
+              >
+                <UploadCloud className="w-4 h-4" />
+                <span>{isSyncingCloud ? 'Syncing...' : 'Push Phone Data to Cloud Now'}</span>
+              </button>
+            </div>
+
+            {/* 1-Click SQL Migration */}
+            <div className="bg-charcoal-950 border border-charcoal-800 rounded-2xl p-4 mb-5 space-y-3">
+              <h4 className="text-xs font-bold text-white flex items-center gap-1.5">
+                <Database className="w-4 h-4 text-amber-400" />
+                <span>2. Supabase 1-Click Database Setup SQL</span>
+              </h4>
+              <p className="text-xs text-slate-400">
+                If Supabase shows permission error or missing tables, run this SQL script once in your Supabase SQL Editor. It creates the tables and enables real-time WebSocket sync.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={handleCopySql}
+                  className="px-4 py-2 rounded-xl bg-charcoal-800 hover:bg-charcoal-700 text-amber-400 border border-amber-500/30 text-xs font-bold flex items-center gap-2 transition-colors"
+                >
+                  <Copy className="w-3.5 h-3.5" />
+                  <span>{sqlCopied ? 'Copied to Clipboard!' : 'Copy 1-Click SQL Script'}</span>
+                </button>
+
+                <a
+                  href="https://supabase.com/dashboard/project/zqtowjorluhalunptvgc/sql"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-4 py-2 rounded-xl bg-charcoal-800 hover:bg-charcoal-700 text-slate-200 border border-charcoal-700 text-xs font-semibold flex items-center gap-2 transition-colors"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  <span>Open Supabase SQL Editor</span>
+                </a>
+              </div>
+            </div>
+
+            {/* Offline JSON Backup & Restore */}
+            <div className="bg-charcoal-950 border border-charcoal-800 rounded-2xl p-4 space-y-3">
+              <h4 className="text-xs font-bold text-white flex items-center gap-1.5">
+                <FileJson className="w-4 h-4 text-emerald-400" />
+                <span>3. Manual JSON Backup & Device Transfer</span>
+              </h4>
+              <p className="text-xs text-slate-400">
+                You can also export a complete JSON backup file from your phone and import it directly into your PC or another device with one click.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={handleExportJson}
+                  className="px-3.5 py-2 rounded-xl bg-charcoal-800 hover:bg-charcoal-700 text-slate-200 border border-charcoal-700 text-xs font-semibold flex items-center gap-2"
+                >
+                  <DownloadCloud className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Export Backup (.json)</span>
+                </button>
+                <label className="px-3.5 py-2 rounded-xl bg-charcoal-800 hover:bg-charcoal-700 text-slate-200 border border-charcoal-700 text-xs font-semibold flex items-center gap-2 cursor-pointer">
+                  <UploadCloud className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Import Backup (.json)</span>
+                  <input
+                    ref={jsonImportInputRef}
+                    type="file"
+                    accept=".json"
+                    onChange={handleImportJsonFile}
+                    className="hidden"
+                  />
+                </label>
+              </div>
+            </div>
           </div>
         </div>
       )}

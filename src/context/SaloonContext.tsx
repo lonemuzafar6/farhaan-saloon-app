@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useMemo, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
   Barber,
   BarberStatus,
@@ -17,6 +17,7 @@ import {
   isSlotAvailable,
 } from '../lib/queueAlgorithm';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import { CloudSync, CloudSyncState } from '../lib/cloudSync';
 
 interface SaloonContextType {
   settings: SalonSettings;
@@ -82,6 +83,12 @@ interface SaloonContextType {
   requestNotificationPermission: () => Promise<boolean>;
   sendNotification: (title: string, body: string) => void;
   resetAllDemoData: () => void;
+  // Cloud Real-Time Synchronization
+  cloudSyncState: CloudSyncState;
+  pushPhoneDataToCloud: () => Promise<{ success: boolean; message: string }>;
+  pullCloudData: () => Promise<void>;
+  exportBackupJson: () => string;
+  importBackupJson: (jsonStr: string) => boolean;
 }
 
 const SaloonContext = createContext<SaloonContextType | undefined>(undefined);
@@ -99,6 +106,18 @@ export const SaloonProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [isOnline, setIsOnline] = useState<boolean>(navigator.onLine);
   const [activeRole, setActiveRole] = useState<'customer' | 'barber' | 'admin'>('customer');
   const [activeBarberId, setActiveBarberId] = useState<string>('barber-farhaan');
+
+  const [cloudSyncState, setCloudSyncState] = useState<CloudSyncState>({
+    status: isSupabaseConfigured ? 'connected' : 'offline',
+    message: isSupabaseConfigured ? 'Connecting to real-time cloud...' : 'Offline-first Local Storage mode',
+    lastSyncedAt: null,
+  });
+
+  // Keep a ref to latest state for pushPhoneDataToCloud
+  const stateRef = useRef({ settings, barbers, services, styles, queues, appointments });
+  useEffect(() => {
+    stateRef.current = { settings, barbers, services, styles, queues, appointments };
+  }, [settings, barbers, services, styles, queues, appointments]);
 
   // Online / offline listeners
   useEffect(() => {
@@ -124,18 +143,217 @@ export const SaloonProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
   }, []);
 
-  // Real-time synchronization with Supabase if configured
+  // ---------------------------------------------------------------------------
+  // INITIAL CLOUD SYNC & DATA RECONCILIATION
+  // ---------------------------------------------------------------------------
+  const pullCloudData = useCallback(async () => {
+    if (!CloudSync.isConfigured()) return;
+
+    const connTest = await CloudSync.testConnection();
+    setCloudSyncState(connTest);
+    if (connTest.status !== 'connected') return;
+
+    const cloudData = await CloudSync.fetchAll();
+
+    if (cloudData.hasCloudData) {
+      // Supabase has data: update state & localStorage
+      if (cloudData.settings) {
+        setSettings(cloudData.settings);
+        StorageEngine.saveSettings(cloudData.settings);
+      }
+      if (cloudData.barbers && cloudData.barbers.length > 0) {
+        setBarbers(cloudData.barbers);
+        StorageEngine.saveBarbers(cloudData.barbers);
+      }
+      if (cloudData.services && cloudData.services.length > 0) {
+        setServices(cloudData.services);
+        StorageEngine.saveServices(cloudData.services);
+      }
+      if (cloudData.styles && cloudData.styles.length > 0) {
+        setStyles(cloudData.styles);
+        StorageEngine.saveStyles(cloudData.styles);
+      }
+      if (cloudData.queues) {
+        setQueues(cloudData.queues);
+        StorageEngine.saveQueues(cloudData.queues);
+      }
+      if (cloudData.appointments) {
+        setAppointments(cloudData.appointments);
+        StorageEngine.saveAppointments(cloudData.appointments);
+      }
+
+      setCloudSyncState({
+        status: 'connected',
+        message: 'Loaded latest cloud data & live updates active.',
+        lastSyncedAt: new Date().toLocaleTimeString(),
+      });
+    } else {
+      // Cloud database is empty: Seed it with local data so all devices can see it!
+      console.log('Cloud database is empty. Auto-seeding local data to Supabase...');
+      const pushRes = await CloudSync.pushAllLocalToCloud(stateRef.current);
+      if (pushRes.success) {
+        setCloudSyncState({
+          status: 'connected',
+          message: 'Local data synced to cloud database.',
+          lastSyncedAt: new Date().toLocaleTimeString(),
+        });
+      }
+    }
+  }, []);
+
+  // Run initial pull on mount
+  useEffect(() => {
+    pullCloudData();
+  }, [pullCloudData]);
+
+  // ---------------------------------------------------------------------------
+  // SUPABASE REALTIME SUBSCRIPTIONS
+  // ---------------------------------------------------------------------------
   useEffect(() => {
     if (!isSupabaseConfigured || !supabase) return;
 
-    // Subscribe to queue changes
     const channel = supabase
-      .channel('public:queue_entries')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'queue_entries' }, () => {
-        // Sync when updated remotely
-        console.log('Realtime queue update received from Supabase');
+      .channel('farhaan-realtime-all')
+      // 1. Queue entries changes
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'queue_entries' }, (payload) => {
+        if (payload.eventType === 'INSERT') {
+          const newEntry = payload.new as QueueEntry;
+          setQueues((prev) => {
+            if (prev.some((q) => q.id === newEntry.id)) return prev;
+            const updated = [...prev, newEntry];
+            StorageEngine.saveQueues(updated);
+            return updated;
+          });
+        } else if (payload.eventType === 'UPDATE') {
+          const updatedEntry = payload.new as QueueEntry;
+          setQueues((prev) => {
+            const updated = prev.map((q) => (q.id === updatedEntry.id ? { ...q, ...updatedEntry } : q));
+            StorageEngine.saveQueues(updated);
+            return updated;
+          });
+        } else if (payload.eventType === 'DELETE') {
+          const deletedId = (payload.old as { id: string })?.id;
+          if (deletedId) {
+            setQueues((prev) => {
+              const updated = prev.filter((q) => q.id !== deletedId);
+              StorageEngine.saveQueues(updated);
+              return updated;
+            });
+          }
+        }
       })
-      .subscribe();
+      // 2. Barbers changes (photo, name, status, break)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'barbers' }, (payload) => {
+        if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
+          const b = payload.new as Barber;
+          setBarbers((prev) => {
+            const exists = prev.some((item) => item.id === b.id);
+            const updated = exists
+              ? prev.map((item) => (item.id === b.id ? { ...item, ...b } : item))
+              : [...prev, b];
+            StorageEngine.saveBarbers(updated);
+            return updated;
+          });
+        } else if (payload.eventType === 'DELETE') {
+          const deletedId = (payload.old as { id: string })?.id;
+          if (deletedId) {
+            setBarbers((prev) => {
+              const updated = prev.filter((b) => b.id !== deletedId);
+              StorageEngine.saveBarbers(updated);
+              return updated;
+            });
+          }
+        }
+      })
+      // 3. Salon Settings changes (name, phone, address, is_open, etc.)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'salon_settings' }, (payload) => {
+        if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
+          const { id, updated_at, ...newSettings } = payload.new as SalonSettings & { id?: string; updated_at?: string };
+          setSettings((prev) => {
+            const updated = { ...prev, ...newSettings };
+            StorageEngine.saveSettings(updated);
+            return updated;
+          });
+        }
+      })
+      // 4. Haircut styles changes
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'haircut_styles' }, (payload) => {
+        if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
+          const st = payload.new as HaircutStyle;
+          setStyles((prev) => {
+            const exists = prev.some((item) => item.id === st.id);
+            const updated = exists
+              ? prev.map((item) => (item.id === st.id ? { ...item, ...st } : item))
+              : [st, ...prev];
+            StorageEngine.saveStyles(updated);
+            return updated;
+          });
+        } else if (payload.eventType === 'DELETE') {
+          const deletedId = (payload.old as { id: string })?.id;
+          if (deletedId) {
+            setStyles((prev) => {
+              const updated = prev.filter((s) => s.id !== deletedId);
+              StorageEngine.saveStyles(updated);
+              return updated;
+            });
+          }
+        }
+      })
+      // 5. Services changes
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'services' }, (payload) => {
+        if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
+          const s = payload.new as Service;
+          setServices((prev) => {
+            const exists = prev.some((item) => item.id === s.id);
+            const updated = exists
+              ? prev.map((item) => (item.id === s.id ? { ...item, ...s } : item))
+              : [...prev, s];
+            StorageEngine.saveServices(updated);
+            return updated;
+          });
+        } else if (payload.eventType === 'DELETE') {
+          const deletedId = (payload.old as { id: string })?.id;
+          if (deletedId) {
+            setServices((prev) => {
+              const updated = prev.filter((item) => item.id !== deletedId);
+              StorageEngine.saveServices(updated);
+              return updated;
+            });
+          }
+        }
+      })
+      // 6. Appointments changes
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'appointments' }, (payload) => {
+        if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
+          const a = payload.new as Appointment;
+          setAppointments((prev) => {
+            const exists = prev.some((item) => item.id === a.id);
+            const updated = exists
+              ? prev.map((item) => (item.id === a.id ? { ...item, ...a } : item))
+              : [a, ...prev];
+            StorageEngine.saveAppointments(updated);
+            return updated;
+          });
+        } else if (payload.eventType === 'DELETE') {
+          const deletedId = (payload.old as { id: string })?.id;
+          if (deletedId) {
+            setAppointments((prev) => {
+              const updated = prev.filter((item) => item.id !== deletedId);
+              StorageEngine.saveAppointments(updated);
+              return updated;
+            });
+          }
+        }
+      })
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          setCloudSyncState((prev) => ({
+            ...prev,
+            status: 'connected',
+            message: 'Real-time WebSocket active. Instant multi-device sync ready.',
+          }));
+        }
+      });
 
     return () => {
       if (supabase) {
@@ -144,13 +362,98 @@ export const SaloonProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     };
   }, []);
 
-  // Save changes to storage engine
+  // ---------------------------------------------------------------------------
+  // EXPLICIT PUSH FROM PHONE TO CLOUD
+  // ---------------------------------------------------------------------------
+  const pushPhoneDataToCloud = useCallback(async () => {
+    const result = await CloudSync.pushAllLocalToCloud(stateRef.current);
+    if (result.success) {
+      setCloudSyncState({
+        status: 'connected',
+        message: 'Phone data successfully pushed to Supabase!',
+        lastSyncedAt: new Date().toLocaleTimeString(),
+      });
+    } else {
+      setCloudSyncState((prev) => ({
+        ...prev,
+        status: result.message.includes('migration') ? 'needs_migration' : 'error',
+        message: result.message,
+      }));
+    }
+    return result;
+  }, []);
+
+  // ---------------------------------------------------------------------------
+  // JSON BACKUP EXPORT / IMPORT
+  // ---------------------------------------------------------------------------
+  const exportBackupJson = useCallback(() => {
+    const backup = {
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      settings: stateRef.current.settings,
+      barbers: stateRef.current.barbers,
+      services: stateRef.current.services,
+      styles: stateRef.current.styles,
+      queues: stateRef.current.queues,
+      appointments: stateRef.current.appointments,
+    };
+    return JSON.stringify(backup, null, 2);
+  }, []);
+
+  const importBackupJson = useCallback((jsonStr: string): boolean => {
+    try {
+      const data = JSON.parse(jsonStr);
+      if (data.settings) {
+        setSettings(data.settings);
+        StorageEngine.saveSettings(data.settings);
+      }
+      if (Array.isArray(data.barbers) && data.barbers.length > 0) {
+        setBarbers(data.barbers);
+        StorageEngine.saveBarbers(data.barbers);
+      }
+      if (Array.isArray(data.services) && data.services.length > 0) {
+        setServices(data.services);
+        StorageEngine.saveServices(data.services);
+      }
+      if (Array.isArray(data.styles) && data.styles.length > 0) {
+        setStyles(data.styles);
+        StorageEngine.saveStyles(data.styles);
+      }
+      if (Array.isArray(data.queues)) {
+        setQueues(data.queues);
+        StorageEngine.saveQueues(data.queues);
+      }
+      if (Array.isArray(data.appointments)) {
+        setAppointments(data.appointments);
+        StorageEngine.saveAppointments(data.appointments);
+      }
+      // Also try syncing imported data to cloud
+      CloudSync.pushAllLocalToCloud({
+        settings: data.settings || stateRef.current.settings,
+        barbers: data.barbers || stateRef.current.barbers,
+        services: data.services || stateRef.current.services,
+        styles: data.styles || stateRef.current.styles,
+        queues: data.queues || stateRef.current.queues,
+        appointments: data.appointments || stateRef.current.appointments,
+      }).catch(console.warn);
+
+      return true;
+    } catch (e) {
+      console.error('Import error:', e);
+      return false;
+    }
+  }, []);
+
+  // ---------------------------------------------------------------------------
+  // CORE APP MUTATIONS WITH DUAL-SYNC (LOCAL STORAGE + SUPABASE)
+  // ---------------------------------------------------------------------------
   const updateSettings = useCallback((newSettings: Partial<SalonSettings>) => {
     setSettings((prev) => {
       const updated = { ...prev, ...newSettings };
       StorageEngine.saveSettings(updated);
       StorageEngine.logAction('UPDATE_SETTINGS', 'SALON_SETTINGS', undefined, 'Updated salon configuration');
       setAuditLogs(StorageEngine.getAuditLogs());
+      CloudSync.syncSettings(updated);
       return updated;
     });
   }, []);
@@ -187,34 +490,8 @@ export const SaloonProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       return updated;
     });
 
-    if (isSupabaseConfigured && supabase) {
-      try {
-        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(barber.id);
-        if (isUuid) {
-          Promise.resolve(
-            supabase
-              .from('barbers')
-              .upsert({
-                id: barber.id,
-                name: barber.name,
-                photo_url: barber.photo_url,
-                bio: barber.bio,
-                experience_years: barber.experience_years,
-                avg_service_mins: barber.avg_service_mins,
-                specialties: barber.specialties,
-                pin_code: barber.pin_code,
-                is_active: barber.is_active,
-              })
-          )
-            .then(() => console.log('Barber synced to Supabase'))
-            .catch((err: unknown) => console.warn('Supabase sync notice:', err));
-        } else {
-          console.log(`Barber "${barber.name}" saved to persistent storage.`);
-        }
-      } catch (err) {
-        console.warn('Supabase sync error ignored for local mode:', err);
-      }
-    }
+    // Sync to cloud
+    CloudSync.syncBarber(barber);
   }, []);
 
   const addBarber = useCallback((barberData: Omit<Barber, 'id'>): Barber => {
@@ -229,6 +506,7 @@ export const SaloonProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       setAuditLogs(StorageEngine.getAuditLogs());
       return updated;
     });
+    CloudSync.syncBarber(newBarber);
     return newBarber;
   }, []);
 
@@ -240,25 +518,31 @@ export const SaloonProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       setAuditLogs(StorageEngine.getAuditLogs());
       return updated;
     });
+    CloudSync.deleteBarber(id);
   }, []);
 
   const updateBarberStatus = useCallback((barberId: string, status: BarberStatus, breakMinutes?: number) => {
     setBarbers((prev) => {
+      let changedBarber: Barber | undefined;
       const updated = prev.map((b) => {
         if (b.id !== barberId) return b;
         let breakEndsAt: string | null = null;
         if (status === 'on_break' && breakMinutes) {
           breakEndsAt = new Date(Date.now() + breakMinutes * 60000).toISOString();
         }
-        return {
+        changedBarber = {
           ...b,
           current_status: status,
           break_ends_at: breakEndsAt,
         };
+        return changedBarber;
       });
       StorageEngine.saveBarbers(updated);
       StorageEngine.logAction('BARBER_STATUS_CHANGE', 'BARBER', barberId, `Changed status to ${status}`);
       setAuditLogs(StorageEngine.getAuditLogs());
+      if (changedBarber) {
+        CloudSync.syncBarber(changedBarber);
+      }
       return updated;
     });
   }, []);
@@ -275,6 +559,7 @@ export const SaloonProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       setAuditLogs(StorageEngine.getAuditLogs());
       return updated;
     });
+    CloudSync.syncService(newService);
     return newService;
   }, []);
 
@@ -286,6 +571,7 @@ export const SaloonProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       setAuditLogs(StorageEngine.getAuditLogs());
       return updated;
     });
+    CloudSync.syncService(service);
   }, []);
 
   const deleteService = useCallback((id: string) => {
@@ -296,6 +582,7 @@ export const SaloonProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       setAuditLogs(StorageEngine.getAuditLogs());
       return updated;
     });
+    CloudSync.deleteService(id);
   }, []);
 
   const addStyle = useCallback((styleData: Omit<HaircutStyle, 'id'>): HaircutStyle => {
@@ -310,6 +597,7 @@ export const SaloonProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       setAuditLogs(StorageEngine.getAuditLogs());
       return updated;
     });
+    CloudSync.syncStyle(newStyle);
     return newStyle;
   }, []);
 
@@ -321,6 +609,7 @@ export const SaloonProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       setAuditLogs(StorageEngine.getAuditLogs());
       return updated;
     });
+    CloudSync.syncStyle(style);
   }, []);
 
   const deleteStyle = useCallback((id: string) => {
@@ -331,6 +620,7 @@ export const SaloonProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       setAuditLogs(StorageEngine.getAuditLogs());
       return updated;
     });
+    CloudSync.deleteStyle(id);
   }, []);
 
   const toggleFavorite = useCallback((styleId: string) => {
@@ -390,7 +680,6 @@ export const SaloonProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       if (data.barberId) {
         targetBarber = barbers.find((b) => b.id === data.barberId) || null;
       } else {
-        // "Any Available Barber" optimization
         isAnyBarber = true;
         targetBarber = selectBestAvailableBarber(barbers, queues, appointments);
       }
@@ -405,7 +694,6 @@ export const SaloonProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       const tokenNumber = generateTokenNumber(targetBarber, queues);
       const secureToken = `tok_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
 
-      // Calculate priority order
       const existingInBarberQueue = queues.filter((q) => q.barber_id === targetBarber?.id);
       const priorityOrder = existingInBarberQueue.length + 1;
 
@@ -439,7 +727,6 @@ export const SaloonProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         return updated;
       });
 
-      // Save user active token in local storage
       setUserActiveToken(secureToken);
       StorageEngine.setUserActiveToken(secureToken);
 
@@ -455,6 +742,9 @@ export const SaloonProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         "You're in the Queue!",
         `Token ${tokenNumber} assigned for ${targetBarber.name}. Est wait: ${waitEst.min_wait_mins}-${waitEst.max_wait_mins} mins.`
       );
+
+      // Realtime Cloud sync
+      CloudSync.syncQueueEntry(newEntry);
 
       return newEntry;
     },
@@ -514,6 +804,8 @@ export const SaloonProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       );
       setAuditLogs(StorageEngine.getAuditLogs());
 
+      CloudSync.syncQueueEntry(newEntry);
+
       return newEntry;
     },
     [barbers, services, styles, queues]
@@ -522,14 +814,17 @@ export const SaloonProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   // Start Service
   const startService = useCallback(
     (queueEntryId: string) => {
+      let changedEntry: QueueEntry | undefined;
+
       setQueues((prev) => {
         const updated = prev.map((q) => {
           if (q.id === queueEntryId) {
-            return {
+            changedEntry = {
               ...q,
               status: 'in_service' as const,
               started_at: new Date().toISOString(),
             };
+            return changedEntry;
           }
           return q;
         });
@@ -537,7 +832,6 @@ export const SaloonProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         return updated;
       });
 
-      // Update barber status to serving
       const entry = queues.find((q) => q.id === queueEntryId);
       if (entry && entry.barber_id) {
         updateBarberStatus(entry.barber_id, 'serving');
@@ -549,6 +843,10 @@ export const SaloonProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         );
         setAuditLogs(StorageEngine.getAuditLogs());
       }
+
+      if (changedEntry) {
+        CloudSync.syncQueueEntry(changedEntry);
+      }
     },
     [queues, updateBarberStatus]
   );
@@ -559,6 +857,7 @@ export const SaloonProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       let targetBarberId: string | null = null;
       let completedCustomerName = '';
       let completedToken = '';
+      let changedEntry: QueueEntry | undefined;
 
       setQueues((prev) => {
         const updated = prev.map((q) => {
@@ -566,11 +865,12 @@ export const SaloonProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             targetBarberId = q.barber_id;
             completedCustomerName = q.customer_name;
             completedToken = q.token_number;
-            return {
+            changedEntry = {
               ...q,
               status: 'completed' as const,
               completed_at: new Date().toISOString(),
             };
+            return changedEntry;
           }
           return q;
         });
@@ -578,7 +878,6 @@ export const SaloonProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         return updated;
       });
 
-      // Check if this was user's active token
       const currentActive = queues.find((q) => q.id === queueEntryId);
       if (currentActive && (currentActive.secure_token === userActiveToken || currentActive.token_number === userActiveToken)) {
         setUserActiveToken(null);
@@ -586,7 +885,6 @@ export const SaloonProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       }
 
       if (targetBarberId) {
-        // Check if there are other waiting customers for this barber
         const remainingWaiting = queues.filter(
           (q) => q.barber_id === targetBarberId && q.id !== queueEntryId && q.status === 'waiting'
         );
@@ -603,19 +901,26 @@ export const SaloonProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         );
         setAuditLogs(StorageEngine.getAuditLogs());
       }
+
+      if (changedEntry) {
+        CloudSync.syncQueueEntry(changedEntry);
+      }
     },
     [queues, userActiveToken, updateBarberStatus]
   );
 
-  // Skip Customer (recoverable - does not silently disappear!)
+  // Skip Customer (recoverable)
   const skipCustomer = useCallback((queueEntryId: string) => {
+    let changedEntry: QueueEntry | undefined;
+
     setQueues((prev) => {
       const updated = prev.map((q) => {
         if (q.id === queueEntryId) {
-          return {
+          changedEntry = {
             ...q,
             status: 'skipped' as const,
           };
+          return changedEntry;
         }
         return q;
       });
@@ -633,18 +938,25 @@ export const SaloonProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       );
       setAuditLogs(StorageEngine.getAuditLogs());
     }
+
+    if (changedEntry) {
+      CloudSync.syncQueueEntry(changedEntry);
+    }
   }, [queues]);
 
-  // Recall a skipped customer back to waiting status at top of queue
+  // Recall a skipped customer
   const recallCustomer = useCallback((queueEntryId: string) => {
+    let changedEntry: QueueEntry | undefined;
+
     setQueues((prev) => {
       const updated = prev.map((q) => {
         if (q.id === queueEntryId) {
-          return {
+          changedEntry = {
             ...q,
             status: 'waiting' as const,
-            priority_order: 1, // prioritize recalled customer
+            priority_order: 1,
           };
+          return changedEntry;
         }
         return q;
       });
@@ -662,6 +974,10 @@ export const SaloonProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       );
       setAuditLogs(StorageEngine.getAuditLogs());
     }
+
+    if (changedEntry) {
+      CloudSync.syncQueueEntry(changedEntry);
+    }
   }, [queues]);
 
   // Transfer / Reassign customer to another barber
@@ -669,16 +985,18 @@ export const SaloonProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     (queueEntryId: string, newBarberId: string, reason: string = 'Operational reassignment') => {
       const newBarber = barbers.find((b) => b.id === newBarberId);
       if (!newBarber) return;
+      let changedEntry: QueueEntry | undefined;
 
       setQueues((prev) => {
         const updated = prev.map((q) => {
           if (q.id === queueEntryId) {
-            return {
+            changedEntry = {
               ...q,
               barber_id: newBarber.id,
               barber_name: newBarber.name,
               priority_order: prev.filter((item) => item.barber_id === newBarber.id).length + 1,
             };
+            return changedEntry;
           }
           return q;
         });
@@ -694,6 +1012,10 @@ export const SaloonProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         `Reassigned ${entry?.customer_name} to ${newBarber.name}. Reason: ${reason}`
       );
       setAuditLogs(StorageEngine.getAuditLogs());
+
+      if (changedEntry) {
+        CloudSync.syncQueueEntry(changedEntry);
+      }
     },
     [barbers, queues]
   );
@@ -701,13 +1023,16 @@ export const SaloonProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   // Customer cancels their own token
   const cancelToken = useCallback(
     (tokenOrSecure: string) => {
+      let changedEntry: QueueEntry | undefined;
+
       setQueues((prev) => {
         const updated = prev.map((q) => {
           if (q.secure_token === tokenOrSecure || q.token_number === tokenOrSecure) {
-            return {
+            changedEntry = {
               ...q,
               status: 'cancelled' as const,
             };
+            return changedEntry;
           }
           return q;
         });
@@ -722,6 +1047,10 @@ export const SaloonProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
       StorageEngine.logAction('CANCEL_TOKEN', 'QUEUE_ENTRY', undefined, `Token cancelled by customer: ${tokenOrSecure}`);
       setAuditLogs(StorageEngine.getAuditLogs());
+
+      if (changedEntry) {
+        CloudSync.syncQueueEntry(changedEntry);
+      }
     },
     [userActiveToken]
   );
@@ -749,7 +1078,6 @@ export const SaloonProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       const endM = endTotalMins % 60;
       const endTime = `${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}`;
 
-      // Concurrency / conflict check
       const available = isSlotAvailable(
         barber.id,
         data.appointmentDate,
@@ -804,6 +1132,8 @@ export const SaloonProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         `Your appointment ${appointmentRef} with ${barber.name} is confirmed for ${data.appointmentDate} at ${data.startTime}.`
       );
 
+      CloudSync.syncAppointment(newApt);
+
       return newApt;
     },
     [barbers, services, styles, appointments, sendNotification]
@@ -812,14 +1142,17 @@ export const SaloonProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   // Cancel Appointment
   const cancelAppointment = useCallback(
     (appointmentId: string, reason: string = 'Customer cancellation') => {
+      let changedApt: Appointment | undefined;
+
       setAppointments((prev) => {
         const updated = prev.map((apt) => {
           if (apt.id === appointmentId) {
-            return {
+            changedApt = {
               ...apt,
               status: 'cancelled' as const,
               notes: `${apt.notes ? apt.notes + ' | ' : ''}Cancelled: ${reason}`,
             };
+            return changedApt;
           }
           return apt;
         });
@@ -829,6 +1162,10 @@ export const SaloonProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
       StorageEngine.logAction('CANCEL_APPOINTMENT', 'APPOINTMENT', appointmentId, `Cancelled. Reason: ${reason}`);
       setAuditLogs(StorageEngine.getAuditLogs());
+
+      if (changedApt) {
+        CloudSync.syncAppointment(changedApt);
+      }
     },
     []
   );
@@ -885,6 +1222,12 @@ export const SaloonProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         requestNotificationPermission,
         sendNotification,
         resetAllDemoData,
+        // Cloud Sync additions
+        cloudSyncState,
+        pushPhoneDataToCloud,
+        pullCloudData,
+        exportBackupJson,
+        importBackupJson,
       }}
     >
       {children}
