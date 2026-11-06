@@ -58,7 +58,32 @@ export const StorageEngine = {
   getBarbers(): Barber[] {
     try {
       const data = localStorage.getItem(STORAGE_KEYS.BARBERS);
-      return data ? JSON.parse(data) : INITIAL_BARBERS;
+      if (!data) return INITIAL_BARBERS;
+      const parsed: Barber[] = JSON.parse(data);
+      let needsSave = false;
+      const updated = parsed.map((b) => {
+        if (b.id === 'barber-farhaan' && (b.photo_url?.includes('unsplash.com') || !b.photo_url)) {
+          needsSave = true;
+          return { ...b, name: 'Farhaan Lone', photo_url: '/barbers/farhaan.jpeg' };
+        }
+        if (b.id === 'barber-sameer' && (b.photo_url?.includes('unsplash.com') || b.name === 'Sameer Khan' || !b.photo_url)) {
+          needsSave = true;
+          return { ...b, name: 'Junaid', photo_url: '/barbers/junaid.jpeg' };
+        }
+        if (b.id === 'barber-zahid' && (b.photo_url?.includes('unsplash.com') || b.name === 'Zahid Mir' || !b.photo_url)) {
+          needsSave = true;
+          return { ...b, name: 'Sahil', photo_url: '/barbers/sahil.jpeg' };
+        }
+        if (b.id === 'barber-irfan' && (b.photo_url?.includes('unsplash.com') || b.name === 'Irfan Dar' || !b.photo_url)) {
+          needsSave = true;
+          return { ...b, name: 'Shadab', photo_url: '/barbers/shadab.jpeg' };
+        }
+        return b;
+      });
+      if (needsSave) {
+        localStorage.setItem(STORAGE_KEYS.BARBERS, JSON.stringify(updated));
+      }
+      return updated;
     } catch {
       return INITIAL_BARBERS;
     }

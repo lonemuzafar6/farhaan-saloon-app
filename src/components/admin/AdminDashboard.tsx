@@ -49,10 +49,10 @@ import { compressImageFile } from '../../utils/imageCompressor';
 import { SUPABASE_MIGRATION_SQL } from '../../data/migrationSql';
 
 const PRESET_BARBER_AVATARS = [
-  { label: 'Master Farhaan', url: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&auto=format&fit=crop&q=80' },
-  { label: 'Senior Sameer', url: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=400&auto=format&fit=crop&q=80' },
-  { label: 'Specialist Zahid', url: 'https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?w=400&auto=format&fit=crop&q=80' },
-  { label: 'Precision Irfan', url: 'https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=400&auto=format&fit=crop&q=80' },
+  { label: 'Farhaan', url: '/barbers/farhaan.jpeg' },
+  { label: 'Junaid', url: '/barbers/junaid.jpeg' },
+  { label: 'Sahil', url: '/barbers/sahil.jpeg' },
+  { label: 'Shadab', url: '/barbers/shadab.jpeg' },
   { label: 'Executive Barber', url: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=400&auto=format&fit=crop&q=80' },
   { label: 'Beard Sculptor', url: 'https://images.unsplash.com/photo-1583863788434-e58a36330cf0?w=400&auto=format&fit=crop&q=80' },
 ];
@@ -459,7 +459,11 @@ export const AdminDashboard: React.FC = () => {
         specialties: specsArray,
         pin_code: barberForm.pin_code.trim() || '1111',
       });
-      showToast(`Updated barber "${barberForm.name}" details and photo!`);
+      showToast(
+        cloudSyncState.status === 'connected'
+          ? `Updated barber "${barberForm.name}" online across all devices!`
+          : `Saved "${barberForm.name}" on this phone! (Run SQL in Supabase to sync to other phones)`
+      );
     } else {
       addBarber({
         name: barberForm.name.trim(),
@@ -477,7 +481,11 @@ export const AdminDashboard: React.FC = () => {
           days: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
         },
       });
-      showToast(`Added new barber "${barberForm.name}"!`);
+      showToast(
+        cloudSyncState.status === 'connected'
+          ? `Added new barber "${barberForm.name}" online across all devices!`
+          : `Added "${barberForm.name}" on this phone! (Run SQL in Supabase to sync to other phones)`
+      );
     }
     setShowAddBarberModal(false);
     setEditingBarber(null);
@@ -848,6 +856,32 @@ export const AdminDashboard: React.FC = () => {
           </button>
         </div>
       </div>
+
+      {/* Cloud Migration Alert Banner if tables not set up */}
+      {cloudSyncState.status === 'needs_migration' && (
+        <div className="bg-amber-500/10 border-2 border-amber-500/40 rounded-3xl p-4 sm:p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 text-xs shadow-lg shadow-amber-500/5">
+          <div className="flex items-start gap-3">
+            <div className="w-9 h-9 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center shrink-0 mt-0.5">
+              <AlertCircle className="w-5 h-5" />
+            </div>
+            <div>
+              <h4 className="font-bold text-sm text-amber-300">
+                1-Step Action: Connect Changes to Other Phones
+              </h4>
+              <p className="text-slate-300 mt-1 max-w-xl leading-relaxed">
+                Changes to barber photos and prices currently stay on this device only. To broadcast updates to all customer and barber phones, copy the 1-click database setup SQL and paste it into the Supabase SQL editor once.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => setShowCloudModal(true)}
+            className="w-full md:w-auto px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-charcoal-950 font-extrabold text-xs shrink-0 shadow-lg shadow-amber-500/20 flex items-center justify-center gap-2"
+          >
+            <Database className="w-4 h-4" />
+            <span>Open 1-Click SQL Setup</span>
+          </button>
+        </div>
+      )}
 
       {/* Navigation Tabs */}
       <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none border-b border-charcoal-800">

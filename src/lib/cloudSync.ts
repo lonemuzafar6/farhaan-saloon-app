@@ -29,17 +29,24 @@ export const CloudSync = {
     }
 
     try {
-      // Test read & write on barbers table
-      const { data, error } = await supabase.from('barbers').select('id').limit(1);
+      // 1. Test read on barbers table
+      const { data, error } = await supabase.from('barbers').select('id, pin_code').limit(1);
       if (error) {
-        if (error.code === '42P01' || error.message.includes('relation') || error.message.includes('schema cache')) {
+        if (
+          error.code === '42P01' ||
+          error.code === 'PGRST205' ||
+          error.code === 'PGRST204' ||
+          error.message.includes('relation') ||
+          error.message.includes('schema cache') ||
+          error.message.includes('pin_code')
+        ) {
           return {
             status: 'needs_migration',
-            message: 'Database tables not found. Run the SQL migration script in Supabase SQL Editor.',
+            message: 'Database tables outdated or missing. Run the 1-click SQL script in Supabase SQL Editor.',
             lastSyncedAt: null,
           };
         }
-        if (error.code === '42501' || error.message.includes('policy')) {
+        if (error.code === '42501' || error.message.includes('policy') || error.message.includes('security')) {
           return {
             status: 'needs_migration',
             message: 'Row Level Security policy blocked write. Run the SQL update script in Supabase.',
@@ -53,12 +60,19 @@ export const CloudSync = {
         };
       }
 
-      // Check if we can upsert a test ping to salon_settings
+      // 2. Check if salon_settings table exists
       const { error: writeErr } = await supabase.from('salon_settings').select('id').limit(1);
-      if (writeErr && (writeErr.code === '42P01' || writeErr.message.includes('relation'))) {
+      if (
+        writeErr &&
+        (writeErr.code === '42P01' ||
+          writeErr.code === 'PGRST205' ||
+          writeErr.message.includes('relation') ||
+          writeErr.message.includes('schema cache') ||
+          writeErr.message.includes('not find'))
+      ) {
         return {
           status: 'needs_migration',
-          message: 'Table salon_settings not found. Run the SQL migration script.',
+          message: 'Table salon_settings not found. Run the 1-click SQL migration script in Supabase.',
           lastSyncedAt: null,
         };
       }
@@ -386,20 +400,25 @@ export const CloudSync = {
   async syncSettings(settings: SalonSettings): Promise<void> {
     if (!this.isConfigured() || !supabase) return;
     try {
-      await supabase.from('salon_settings').upsert({
+      const { error } = await supabase.from('salon_settings').upsert({
         id: 'default',
         ...settings,
         updated_at: new Date().toISOString(),
       });
+      if (error) {
+        console.error('syncSettings error:', error);
+        throw error;
+      }
     } catch (err) {
       console.warn('syncSettings error:', err);
+      throw err;
     }
   },
 
   async syncBarber(barber: Barber): Promise<void> {
     if (!this.isConfigured() || !supabase) return;
     try {
-      await supabase.from('barbers').upsert({
+      const { error } = await supabase.from('barbers').upsert({
         id: barber.id,
         name: barber.name,
         photo_url: barber.photo_url,
@@ -414,15 +433,21 @@ export const CloudSync = {
         working_hours: barber.working_hours,
         updated_at: new Date().toISOString(),
       });
+      if (error) {
+        console.error('syncBarber error:', error);
+        throw error;
+      }
     } catch (err) {
       console.warn('syncBarber error:', err);
+      throw err;
     }
   },
 
   async deleteBarber(id: string): Promise<void> {
     if (!this.isConfigured() || !supabase) return;
     try {
-      await supabase.from('barbers').delete().eq('id', id);
+      const { error } = await supabase.from('barbers').delete().eq('id', id);
+      if (error) throw error;
     } catch (err) {
       console.warn('deleteBarber error:', err);
     }
@@ -431,7 +456,7 @@ export const CloudSync = {
   async syncService(service: Service): Promise<void> {
     if (!this.isConfigured() || !supabase) return;
     try {
-      await supabase.from('services').upsert({
+      const { error } = await supabase.from('services').upsert({
         id: service.id,
         name: service.name,
         category: service.category,
@@ -441,8 +466,10 @@ export const CloudSync = {
         is_active: service.is_active,
         updated_at: new Date().toISOString(),
       });
+      if (error) throw error;
     } catch (err) {
       console.warn('syncService error:', err);
+      throw err;
     }
   },
 
