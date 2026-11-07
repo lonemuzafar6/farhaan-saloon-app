@@ -77,6 +77,29 @@ export const CloudSync = {
         };
       }
 
+      // 3. Probe if write is allowed by Row Level Security policy
+      const { error: probeErr } = await supabase.from('salon_settings').upsert({
+        id: 'probe_check',
+        name: 'Probe',
+        address: 'Probe',
+        phone: 'Probe',
+      });
+      if (probeErr) {
+        if (
+          probeErr.code === '42501' ||
+          probeErr.message.includes('policy') ||
+          probeErr.message.includes('security')
+        ) {
+          return {
+            status: 'needs_migration',
+            message: 'Database policy is blocking updates. Run the 1-click RLS unlock SQL script in Supabase.',
+            lastSyncedAt: null,
+          };
+        }
+      } else {
+        await supabase.from('salon_settings').delete().eq('id', 'probe_check');
+      }
+
       return {
         status: 'connected',
         message: 'Live real-time PostgreSQL database connected.',
@@ -382,21 +405,31 @@ export const CloudSync = {
         success: true,
         message: 'All salon details, photos, and live queues synced to Cloud successfully!',
       };
-    } catch (err) {
+    } catch (err: unknown) {
       console.error('pushAllLocalToCloud error:', err);
-      const msg = err instanceof Error ? err.message : String(err);
+      let msg = '';
+      if (err instanceof Error) {
+        msg = err.message;
+      } else if (typeof err === 'object' && err !== null && 'message' in err) {
+        msg = String((err as { message: unknown }).message);
+      } else {
+        msg = JSON.stringify(err);
+      }
+
       const isMigrationIssue =
         msg.includes('policy') ||
+        msg.includes('row-level security') ||
         msg.includes('relation') ||
         msg.includes('schema cache') ||
         msg.includes('Could not find the table') ||
         msg.includes('pin_code') ||
-        msg.includes('uuid');
+        msg.includes('uuid') ||
+        msg.includes('42501');
 
       return {
         success: false,
         message: isMigrationIssue
-          ? 'Database tables need to be created in Supabase! Open "SQL & Backup" below, copy the script, and paste into Supabase SQL Editor.'
+          ? 'Supabase database policy needs 1-click update. Open "SQL & Backup" and run the RLS unlock SQL script.'
           : `Sync error: ${msg}`,
       };
     }

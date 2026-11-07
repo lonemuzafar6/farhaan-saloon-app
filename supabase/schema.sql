@@ -146,14 +146,35 @@ CREATE TABLE public.audit_logs (
     timestamp TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- 9. Disable RLS or Grant Full Access to Anon & Authenticated for Seamless Web App Operation
-ALTER TABLE public.salon_settings DISABLE ROW LEVEL SECURITY;
-ALTER TABLE public.barbers DISABLE ROW LEVEL SECURITY;
-ALTER TABLE public.services DISABLE ROW LEVEL SECURITY;
-ALTER TABLE public.haircut_styles DISABLE ROW LEVEL SECURITY;
-ALTER TABLE public.queue_entries DISABLE ROW LEVEL SECURITY;
-ALTER TABLE public.appointments DISABLE ROW LEVEL SECURITY;
-ALTER TABLE public.audit_logs DISABLE ROW LEVEL SECURITY;
+-- 9. Enable Full Public Access Policies (Allows Anon & Authenticated cross-device real-time read/write)
+ALTER TABLE public.salon_settings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.barbers ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.services ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.haircut_styles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.queue_entries ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.appointments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.audit_logs ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Public full access salon_settings" ON public.salon_settings;
+CREATE POLICY "Public full access salon_settings" ON public.salon_settings FOR ALL TO public USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Public full access barbers" ON public.barbers;
+CREATE POLICY "Public full access barbers" ON public.barbers FOR ALL TO public USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Public full access services" ON public.services;
+CREATE POLICY "Public full access services" ON public.services FOR ALL TO public USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Public full access styles" ON public.haircut_styles;
+CREATE POLICY "Public full access styles" ON public.haircut_styles FOR ALL TO public USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Public full access queues" ON public.queue_entries;
+CREATE POLICY "Public full access queues" ON public.queue_entries FOR ALL TO public USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Public full access appointments" ON public.appointments;
+CREATE POLICY "Public full access appointments" ON public.appointments FOR ALL TO public USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Public full access audit_logs" ON public.audit_logs;
+CREATE POLICY "Public full access audit_logs" ON public.audit_logs FOR ALL TO public USING (true) WITH CHECK (true);
 
 GRANT ALL ON ALL TABLES IN SCHEMA public TO anon, authenticated, service_role;
 GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO anon, authenticated, service_role;
