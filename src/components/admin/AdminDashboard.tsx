@@ -2379,6 +2379,13 @@ export const AdminDashboard: React.FC = () => {
               <p className="text-xs text-slate-400">
                 If Supabase shows permission error or missing tables, run this SQL script once in your Supabase SQL Editor. It creates the tables and enables real-time WebSocket sync.
               </p>
+              <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl text-[11px] text-amber-200/90 space-y-1">
+                <p className="font-bold text-amber-300">Quick Setup Instructions:</p>
+                <p>1. Tap <strong>Copy 1-Click SQL Script</strong> below.</p>
+                <p>2. Tap <strong>Open Supabase SQL Editor</strong> (opens query editor in new tab).</p>
+                <p>3. Paste the code and tap <strong>Run</strong> (creates the tables in 5 seconds).</p>
+                <p>4. Return here and tap <strong>Push Phone Data to Cloud Now</strong> above. All done!</p>
+              </div>
               <div className="flex flex-wrap gap-2">
                 <button
                   onClick={handleCopySql}
@@ -2389,7 +2396,7 @@ export const AdminDashboard: React.FC = () => {
                 </button>
 
                 <a
-                  href="https://supabase.com/dashboard/project/zqtowjorluhalunptvgc/sql"
+                  href="https://supabase.com/dashboard/project/zqtowjorluhalunptvgc/sql/new"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="px-4 py-2 rounded-xl bg-charcoal-800 hover:bg-charcoal-700 text-slate-200 border border-charcoal-700 text-xs font-semibold flex items-center gap-2 transition-colors"
@@ -2409,6 +2416,13 @@ export const AdminDashboard: React.FC = () => {
               <p className="text-xs text-slate-400">
                 You can also export a complete JSON backup file from your phone and import it directly into your PC or another device with one click.
               </p>
+              <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl text-[11px] text-amber-200/90 space-y-1">
+                <p className="font-bold text-amber-300">Quick Setup Instructions:</p>
+                <p>1. Tap <strong>Copy 1-Click SQL Script</strong> below.</p>
+                <p>2. Tap <strong>Open Supabase SQL Editor</strong> (opens query editor in new tab).</p>
+                <p>3. Paste the code and tap <strong>Run</strong> (creates the tables in 5 seconds).</p>
+                <p>4. Return here and tap <strong>Push Phone Data to Cloud Now</strong> above. All done!</p>
+              </div>
               <div className="flex flex-wrap gap-2">
                 <button
                   onClick={handleExportJson}

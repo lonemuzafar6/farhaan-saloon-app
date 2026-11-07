@@ -385,10 +385,18 @@ export const CloudSync = {
     } catch (err) {
       console.error('pushAllLocalToCloud error:', err);
       const msg = err instanceof Error ? err.message : String(err);
+      const isMigrationIssue =
+        msg.includes('policy') ||
+        msg.includes('relation') ||
+        msg.includes('schema cache') ||
+        msg.includes('Could not find the table') ||
+        msg.includes('pin_code') ||
+        msg.includes('uuid');
+
       return {
         success: false,
-        message: msg.includes('policy') || msg.includes('relation')
-          ? 'Supabase database tables need migration. Please run the SQL update in Supabase SQL editor.'
+        message: isMigrationIssue
+          ? 'Database tables need to be created in Supabase! Open "SQL & Backup" below, copy the script, and paste into Supabase SQL Editor.'
           : `Sync error: ${msg}`,
       };
     }
