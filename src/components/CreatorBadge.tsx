@@ -9,23 +9,23 @@ export const CreatorBadge: React.FC = () => {
   return (
     <>
       {/* Sleek App Creator Banner */}
-      <div className="bg-gradient-to-r from-amber-950/80 via-charcoal-900 to-amber-950/80 border-y border-amber-500/20 px-3 py-2 text-xs text-amber-200">
+      <div className="bg-gradient-to-r from-amber-500/15 via-amber-500/5 to-amber-500/15 dark:from-amber-950/80 dark:via-charcoal-900 dark:to-amber-950/80 border-y border-amber-500/30 px-3 py-2 text-xs text-amber-950 dark:text-amber-200">
         <div className="max-w-6xl mx-auto flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2">
-            <span className="flex h-2 w-2 rounded-full bg-amber-400 animate-pulse" />
-            <span className="text-slate-300 font-medium">App Creator:</span>
-            <span className="font-bold text-amber-300 tracking-wide">{settings.creator_name}</span>
-            <span className="hidden sm:inline text-amber-400/60">•</span>
-            <span className="hidden sm:inline text-slate-400">Custom Smart Queue & PWA Solutions</span>
+            <span className="flex h-2 w-2 rounded-full bg-amber-500 dark:bg-amber-400 animate-pulse" />
+            <span className="text-slate-700 dark:text-slate-300 font-medium">App Creator:</span>
+            <span className="font-bold text-amber-700 dark:text-amber-300 tracking-wide">{settings.creator_name}</span>
+            <span className="hidden sm:inline text-amber-500/60">•</span>
+            <span className="hidden sm:inline text-slate-600 dark:text-slate-400">Custom Smart Queue & PWA Solutions</span>
           </div>
 
           <div className="flex items-center gap-2">
             <a
               href={`tel:${settings.creator_phone}`}
-              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-300 transition-colors font-medium text-xs"
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-800 dark:text-amber-300 transition-colors font-semibold text-xs"
               title="Call Creator"
             >
-              <Phone className="w-3 h-3 text-amber-400" />
+              <Phone className="w-3 h-3 text-amber-600 dark:text-amber-400" />
               <span>{settings.creator_phone}</span>
             </a>
 

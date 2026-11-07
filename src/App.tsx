@@ -36,7 +36,7 @@ const MainAppContent: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-charcoal-950 text-slate-100 flex flex-col selection:bg-amber-500 selection:text-charcoal-950 font-sans">
+    <div className="min-h-screen bg-charcoal-950 text-slate-900 dark:text-slate-100 flex flex-col selection:bg-amber-500 selection:text-charcoal-950 font-sans">
       {/* Offline Status Warning */}
       <OfflineBanner />
 

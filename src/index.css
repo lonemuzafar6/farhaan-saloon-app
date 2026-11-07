@@ -4,28 +4,142 @@
 
 @layer base {
   :root {
-    color-scheme: dark;
+    color-scheme: light;
+
+    /* Day Mode (Default theme for Farhaan Saloon) */
+    --color-charcoal-950: 248 250 252; /* #f8fafc Page background */
+    --color-charcoal-900: 255 255 255; /* #ffffff Pure white cards / header / panels */
+    --color-charcoal-800: 241 245 249; /* #f1f5f9 Soft light sub-cards / inputs / pills */
+    --color-charcoal-700: 226 232 240; /* #e2e8f0 Light borders & dividers */
+    --color-charcoal-600: 203 213 225; /* #cbd5e1 Medium slate borders */
+    --color-charcoal-500: 148 163 184; /* #94a3b8 Slate-400 */
+    --color-charcoal-400: 100 116 139; /* #64748b Slate-500 */
+    --color-charcoal-300: 71 85 105;   /* #475569 Slate-600 */
+    --color-charcoal-200: 51 65 85;    /* #334155 Slate-700 */
+    --color-charcoal-100: 30 41 59;    /* #1e293b Slate-800 */
+    --color-charcoal-50: 15 23 42;     /* #0f172a Slate-900 */
   }
-  
+
+  html.dark {
+    color-scheme: dark;
+
+    /* Dark Mode (Current luxury charcoal & gold theme) */
+    --color-charcoal-950: 17 18 23;    /* #111217 */
+    --color-charcoal-900: 26 28 35;    /* #1a1c23 */
+    --color-charcoal-800: 43 46 55;    /* #2b2e37 */
+    --color-charcoal-700: 71 75 89;    /* #474b59 */
+    --color-charcoal-600: 87 92 109;   /* #575c6d */
+    --color-charcoal-500: 109 116 134; /* #6d7486 */
+    --color-charcoal-400: 139 145 162; /* #8b91a2 */
+    --color-charcoal-300: 180 184 195; /* #b4b8c3 */
+    --color-charcoal-200: 215 217 223; /* #d7d9df */
+    --color-charcoal-100: 237 238 241; /* #edeef1 */
+    --color-charcoal-50: 246 247 248;  /* #f6f7f8 */
+  }
+
   body {
-    @apply bg-charcoal-950 text-slate-100 min-h-screen font-sans antialiased selection:bg-amber-500 selection:text-charcoal-950;
+    @apply bg-charcoal-950 min-h-screen font-sans antialiased selection:bg-amber-500 selection:text-charcoal-950;
     margin: 0;
     padding: 0;
   }
 }
 
-/* Custom scrollbars for styles gallery and queue lists */
+/* Day Mode Typography & Color Enhancements */
+html:not(.dark) body {
+  color: #0f172a;
+}
+
+html.dark body {
+  color: #f1f5f9;
+}
+
+/* In Day mode, headings and titles should be crisp dark slate */
+html:not(.dark) .text-white {
+  color: #0f172a;
+}
+
+/* In Day mode, light text shades should be dark/readable */
+html:not(.dark) .text-slate-100 {
+  color: #0f172a;
+}
+
+html:not(.dark) .text-slate-200 {
+  color: #1e293b;
+}
+
+html:not(.dark) .text-slate-300 {
+  color: #334155;
+}
+
+html:not(.dark) .text-slate-400 {
+  color: #64748b;
+}
+
+/* Preserve crisp white text on colored buttons, alert badges, and dark overlays */
+html:not(.dark) [class*="bg-emerald"] .text-white,
+html:not(.dark) [class*="bg-rose"] .text-white,
+html:not(.dark) [class*="bg-red"] .text-white,
+html:not(.dark) [class*="bg-black"] .text-white,
+html:not(.dark) [class*="bg-slate-900"] .text-white,
+html:not(.dark) .bg-emerald-600,
+html:not(.dark) .bg-emerald-700,
+html:not(.dark) .bg-rose-600,
+html:not(.dark) .bg-rose-700,
+html:not(.dark) .bg-red-600,
+html:not(.dark) button.bg-emerald-600 *,
+html:not(.dark) button.bg-rose-600 *,
+html:not(.dark) a.bg-emerald-600 * {
+  color: #ffffff !important;
+}
+
+/* Amber buttons & badges must ALWAYS have crisp dark charcoal text */
+.text-charcoal-950,
+[class*="bg-amber"] .text-charcoal-950,
+.bg-amber-500.text-charcoal-950,
+.bg-amber-400.text-charcoal-950 {
+  color: #111217 !important;
+}
+
+/* Day mode input & form control styling */
+html:not(.dark) input,
+html:not(.dark) select,
+html:not(.dark) textarea {
+  background-color: #ffffff;
+  color: #0f172a;
+  border-color: #cbd5e1;
+}
+
+html:not(.dark) input::placeholder,
+html:not(.dark) textarea::placeholder {
+  color: #94a3b8;
+}
+
+/* Soft card shadow in Day Mode */
+html:not(.dark) .bg-charcoal-900 {
+  box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.05), 0 1px 2px -1px rgb(0 0 0 / 0.05);
+}
+
+/* Custom scrollbars */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 
-::-webkit-scrollbar-track {
+html.dark ::-webkit-scrollbar-track {
   background: #1a1c23;
 }
 
-::-webkit-scrollbar-thumb {
+html.dark ::-webkit-scrollbar-thumb {
   background: #474b59;
+  border-radius: 9999px;
+}
+
+html:not(.dark) ::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+
+html:not(.dark) ::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
   border-radius: 9999px;
 }
 

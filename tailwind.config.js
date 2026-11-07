@@ -9,17 +9,17 @@ export default {
     extend: {
       colors: {
         charcoal: {
-          50: '#f6f7f8',
-          100: '#edeef1',
-          200: '#d7d9df',
-          300: '#b4b8c3',
-          400: '#8b91a2',
-          500: '#6d7486',
-          600: '#575c6d',
-          700: '#474b59',
-          800: '#2b2e37',
-          900: '#1a1c23',
-          950: '#111217',
+          50: 'rgb(var(--color-charcoal-50) / <alpha-value>)',
+          100: 'rgb(var(--color-charcoal-100) / <alpha-value>)',
+          200: 'rgb(var(--color-charcoal-200) / <alpha-value>)',
+          300: 'rgb(var(--color-charcoal-300) / <alpha-value>)',
+          400: 'rgb(var(--color-charcoal-400) / <alpha-value>)',
+          500: 'rgb(var(--color-charcoal-500) / <alpha-value>)',
+          600: 'rgb(var(--color-charcoal-600) / <alpha-value>)',
+          700: 'rgb(var(--color-charcoal-700) / <alpha-value>)',
+          800: 'rgb(var(--color-charcoal-800) / <alpha-value>)',
+          900: 'rgb(var(--color-charcoal-900) / <alpha-value>)',
+          950: 'rgb(var(--color-charcoal-950) / <alpha-value>)',
         },
         gold: {
           400: '#fbbf24',

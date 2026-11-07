@@ -1,10 +1,19 @@
 import React, { useState } from 'react';
-import { Scissors, UserCheck, Shield, Users, Bell, Clock, MapPin, Lock, LogOut } from 'lucide-react';
+import { Scissors, UserCheck, Shield, Users, Bell, Clock, MapPin, Lock, LogOut, Sun, Moon } from 'lucide-react';
 import { useSaloon } from '../context/SaloonContext';
 import { StaffLoginModal } from './StaffLoginModal';
 
 export const Header: React.FC = () => {
-  const { settings, activeRole, setActiveRole, activeBarberId, barbers, requestNotificationPermission } = useSaloon();
+  const {
+    settings,
+    activeRole,
+    setActiveRole,
+    activeBarberId,
+    barbers,
+    requestNotificationPermission,
+    theme,
+    toggleTheme,
+  } = useSaloon();
   const [showStaffModal, setShowStaffModal] = useState(false);
 
   const currentBarber = barbers.find((b) => b.id === activeBarberId) || barbers[0];
@@ -54,6 +63,20 @@ export const Header: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-2 sm:hidden">
+            {/* Theme Toggle Button (Mobile) */}
+            <button
+              onClick={toggleTheme}
+              className="p-2 rounded-lg bg-charcoal-800 text-slate-300 hover:text-amber-400 transition-colors border border-charcoal-700/60"
+              title={theme === 'dark' ? 'Switch to Day Mode (Light)' : 'Switch to Dark Mode'}
+              aria-label="Toggle theme"
+            >
+              {theme === 'dark' ? (
+                <Sun className="w-4 h-4 text-amber-400" />
+              ) : (
+                <Moon className="w-4 h-4 text-slate-600" />
+              )}
+            </button>
+
             <button
               onClick={handleNotificationClick}
               className="p-2 rounded-lg bg-charcoal-800 text-slate-300 hover:text-amber-400 transition-colors"
@@ -83,8 +106,28 @@ export const Header: React.FC = () => {
           </div>
         </div>
 
-        {/* Right Action Controls: Notification + Role-Specific Actions */}
+        {/* Right Action Controls: Theme Toggle + Notification + Role-Specific Actions */}
         <div className="hidden sm:flex items-center gap-3">
+          {/* Theme Toggle Button (Desktop) */}
+          <button
+            onClick={toggleTheme}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-charcoal-800 hover:bg-charcoal-700 text-slate-300 hover:text-amber-400 text-xs font-semibold border border-charcoal-700 transition-colors"
+            title={theme === 'dark' ? 'Switch to Day Mode (Light)' : 'Switch to Dark Mode'}
+            aria-label="Toggle theme"
+          >
+            {theme === 'dark' ? (
+              <>
+                <Sun className="w-3.5 h-3.5 text-amber-400" />
+                <span className="text-amber-300 font-bold">Day Mode</span>
+              </>
+            ) : (
+              <>
+                <Moon className="w-3.5 h-3.5 text-slate-600" />
+                <span className="text-slate-700 font-bold">Dark Mode</span>
+              </>
+            )}
+          </button>
+
           <button
             onClick={handleNotificationClick}
             className="flex items-center gap-1 p-2 rounded-lg bg-charcoal-800 text-slate-300 hover:text-amber-400 transition-colors"

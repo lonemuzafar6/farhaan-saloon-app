@@ -89,6 +89,10 @@ interface SaloonContextType {
   pullCloudData: () => Promise<void>;
   exportBackupJson: () => string;
   importBackupJson: (jsonStr: string) => boolean;
+  // Day / Dark Theme Management
+  theme: 'light' | 'dark';
+  setTheme: (theme: 'light' | 'dark') => void;
+  toggleTheme: () => void;
 }
 
 const SaloonContext = createContext<SaloonContextType | undefined>(undefined);
@@ -112,6 +116,46 @@ export const SaloonProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     message: isSupabaseConfigured ? 'Connecting to real-time cloud...' : 'Offline-first Local Storage mode',
     lastSyncedAt: null,
   });
+
+  // Theme Management (Light / Day Mode as default)
+  const [theme, setThemeState] = useState<'light' | 'dark'>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('farhaan_theme');
+      if (saved === 'dark') return 'dark';
+    }
+    return 'light'; // Day Mode default
+  });
+
+  const applyTheme = (newTheme: 'light' | 'dark') => {
+    if (typeof document !== 'undefined') {
+      if (newTheme === 'dark') {
+        document.documentElement.classList.add('dark');
+      } else {
+        document.documentElement.classList.remove('dark');
+      }
+      const metaThemeColor = document.querySelector('meta[name="theme-color"]');
+      if (metaThemeColor) {
+        metaThemeColor.setAttribute('content', newTheme === 'dark' ? '#111217' : '#f8fafc');
+      }
+    }
+  };
+
+  const setTheme = (newTheme: 'light' | 'dark') => {
+    setThemeState(newTheme);
+    try {
+      localStorage.setItem('farhaan_theme', newTheme);
+    } catch (e) {}
+    applyTheme(newTheme);
+  };
+
+  const toggleTheme = () => {
+    const next = theme === 'dark' ? 'light' : 'dark';
+    setTheme(next);
+  };
+
+  useEffect(() => {
+    applyTheme(theme);
+  }, [theme]);
 
   // Keep a ref to latest state for pushPhoneDataToCloud
   const stateRef = useRef({ settings, barbers, services, styles, queues, appointments });
@@ -1228,6 +1272,10 @@ export const SaloonProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         pullCloudData,
         exportBackupJson,
         importBackupJson,
+        // Theme
+        theme,
+        setTheme,
+        toggleTheme,
       }}
     >
       {children}
